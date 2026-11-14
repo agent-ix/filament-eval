@@ -3,7 +3,7 @@ id: FR-003
 title: Remove one occurrence through the shared checked collection kernel
 type: FR
 relationships:
-  - target: ix://agent-ix/quire-specification/FR-145
+  - target: ix://agent-ix/filament-specification/FR-145
     type: implements
 ---
 # FR-003: Remove one occurrence through the shared checked collection kernel
@@ -16,10 +16,10 @@ its operands in source order. These descriptors grant no checking authority.
 
 ## Behavior
 
-The `quire-eval` collection operations consume canonical collection values,
+The `filament-eval` collection operations consume canonical collection values,
 the canonical meter, and, for a removal probe, the caller's canonical type
 environment. They SHALL delegate membership comparison and result formation
-to `quire-exact`, preserving all non-completed outcomes and their causes.
+to `filament-exact`, preserving all non-completed outcomes and their causes.
 
 `drop_first` SHALL accept sequences and ordered sets, remove the leading
 occurrence when present, and form the remaining occurrences in their original
@@ -64,6 +64,6 @@ requirement does not claim that qualification from descriptor tests.
 ## Dependencies
 
 - QSpec FR-145 owns collection removal semantics and the charge schedule.
-- `quire-exact` owns canonical formation, membership, values, bounds and meters.
-- `quire-semantic-value` owns schema admission and its typed failures.
+- `filament-exact` owns canonical formation, membership, values, bounds and meters.
+- `filament-semantic-value` owns schema admission and its typed failures.
 - QSL-1488 owns grammar, static source typing, lowering and source qualification.

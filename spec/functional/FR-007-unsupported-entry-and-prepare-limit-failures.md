@@ -3,13 +3,13 @@ id: FR-007
 title: Name the unsupported-entry and prepare-limit call failures
 type: FR
 relationships:
-  - target: ix://agent-ix/quire-spec-language/FR-401
+  - target: ix://agent-ix/filament-spec-language/FR-401
     type: implements
-  - target: ix://agent-ix/quire-spec-language/FR-294
+  - target: ix://agent-ix/filament-spec-language/FR-294
     type: implements
-  - target: ix://agent-ix/quire-spec-language/FR-296
+  - target: ix://agent-ix/filament-spec-language/FR-296
     type: implements
-  - target: ix://agent-ix/quire-spec-language/FR-279
+  - target: ix://agent-ix/filament-spec-language/FR-279
     type: implements
 ---
 # FR-007: Name the unsupported-entry and prepare-limit call failures
@@ -19,8 +19,8 @@ relationships:
 `CallFailure` SHALL have the arm `Unsupported(UnsupportedEntry)` for an entry
 the chosen execution backend cannot run, and the arm `Limit(PrepareLimitReached)`
 for a prepare bound that a backend's `prepare` reached. Both payloads belong to
-this crate so that it names no item of a QSL crate. No evaluator in this crate
-returns either arm; only a non-interpreter backend and QSL's `execute` do.
+this crate so that it names no item of an FSL crate. No evaluator in this crate
+returns either arm; only a non-interpreter backend and FSL's `execute` do.
 
 ## Behavior
 
@@ -55,5 +55,5 @@ All payloads are `Clone`, `Eq` and `PartialEq`, like `CallFailure`.
 
 ## Dependencies
 
-- QSL FR-401, FR-294, FR-296 and FR-279 own the interface and the arms' use.
-- `quire-semantic-value` owns `Category`, `CatalogCode` and `ExpressionLocation`.
+- FSL FR-401, FR-294, FR-296 and FR-279 own the interface and the arms' use.
+- `filament-semantic-value` owns `Category`, `CatalogCode` and `ExpressionLocation`.

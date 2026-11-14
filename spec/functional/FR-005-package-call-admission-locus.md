@@ -3,7 +3,7 @@ id: FR-005
 title: Name package-level checked-call admission failures
 type: FR
 relationships:
-  - target: ix://agent-ix/quire-spec-language/FR-390
+  - target: ix://agent-ix/filament-spec-language/FR-390
     type: implements
 ---
 # FR-005: Name package-level checked-call admission failures
@@ -20,7 +20,7 @@ the package as a whole. It SHALL retain the existing `Node`, `Population`,
 `Package` SHALL remain distinguishable from every existing locus through the
 public enum and through `CallAdmissionRecord`. The record SHALL retain the
 original diagnostic with a package locus. This locus does not itself contain
-package identity or refusal reason; QSL FR-390 owns the ordering of unsupported
+package identity or refusal reason; FSL FR-390 owns the ordering of unsupported
 view failures across packages.
 
 ## Acceptance Criteria
@@ -32,6 +32,6 @@ view failures across packages.
 
 ## Dependencies
 
-- QSL FR-390 owns package identity, unsupported-view reasons, and ordering of
+- FSL FR-390 owns package identity, unsupported-view reasons, and ordering of
   failures across packages.
-- `quire-exact` owns `NodeKey` identity and its order.
+- `filament-exact` owns `NodeKey` identity and its order.

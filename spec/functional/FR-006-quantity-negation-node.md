@@ -3,9 +3,9 @@ id: FR-006
 title: Read the checked quantity-negation operation
 type: FR
 relationships:
-  - target: ix://agent-ix/quire-specification/FR-142
+  - target: ix://agent-ix/filament-specification/FR-142
     type: implements
-  - target: ix://agent-ix/quire-specification/FR-322
+  - target: ix://agent-ix/filament-specification/FR-322
     type: implements
 ---
 # FR-006: Read the checked quantity-negation operation
@@ -24,8 +24,8 @@ handle, and borrow the supplied checked result type and location unchanged.
 The descriptor SHALL not choose a unit, convert a magnitude, evaluate the
 operation or infer admission from its shape. The admitted operation's result
 is the operand's `Quantity<Unit>` type and unit; QSpec owns the non-affine
-operand restriction and exact, total, unit-preserving semantics. QSL owns
-lowering to this node, and `quire-semantic-value` owns the quantity value
+operand restriction and exact, total, unit-preserving semantics. FSL owns
+lowering to this node, and `filament-semantic-value` owns the quantity value
 operation.
 
 ## Acceptance Criteria
@@ -40,4 +40,4 @@ operation.
 - QSpec FR-142 "Quantity negation" owns exact, total, unit-preserving evaluation and affine-unit refusal.
 - QSpec FR-322-AC-119 owns checked-package operation admission and its single-operand `result operand:0` typing rule.
 - QSpec FR-146-AC-9 owns the nonzero divisor fact for negated quantity literals.
-- QSL owns unary-minus lowering, and `quire-semantic-value` owns the quantity value operation.
+- FSL owns unary-minus lowering, and `filament-semantic-value` owns the quantity value operation.

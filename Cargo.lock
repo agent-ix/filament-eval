@@ -65,6 +65,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "filament-checked"
+version = "0.1.0"
+dependencies = [
+ "filament-exact",
+ "filament-semantic-value",
+ "filament-walk",
+ "ix-trace-rs",
+ "quire-canonical",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "filament-eval"
+version = "0.1.0"
+dependencies = [
+ "filament-exact",
+ "filament-semantic-value",
+ "ix-trace-rs",
+ "thiserror",
+]
+
+[[package]]
+name = "filament-exact"
+version = "0.1.0"
+source = "git+https://github.com/agent-ix/filament-exact?branch=main#98a815d3e759ca8f95df3249138bfb03c6fcb116"
+dependencies = [
+ "allocator-api2",
+ "arrayvec",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "once_cell",
+ "spin",
+ "thiserror",
+ "triomphe",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "filament-semantic-value"
+version = "0.1.0"
+source = "git+https://github.com/agent-ix/filament-semantic-value?branch=main#ad1c93f31f7e417aec27afbf06bfba6dfd7ba7c8"
+dependencies = [
+ "filament-exact",
+ "quire-canonical",
+ "thiserror",
+]
+
+[[package]]
+name = "filament-walk"
+version = "0.1.0"
+source = "git+https://github.com/agent-ix/filament-walk?branch=main#f7c0da9361597200ca7d01b1ef9f938578f4dc1f"
+
+[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -149,61 +204,6 @@ dependencies = [
  "quote",
  "syn",
 ]
-
-[[package]]
-name = "quire-checked"
-version = "0.1.0"
-dependencies = [
- "ix-trace-rs",
- "quire-canonical",
- "quire-exact",
- "quire-semantic-value",
- "quire-walk",
- "serde",
- "thiserror",
-]
-
-[[package]]
-name = "quire-eval"
-version = "0.1.0"
-dependencies = [
- "ix-trace-rs",
- "quire-exact",
- "quire-semantic-value",
- "thiserror",
-]
-
-[[package]]
-name = "quire-exact"
-version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-exact?branch=main#2fd32cc1b970dde49046219132eab97418395258"
-dependencies = [
- "allocator-api2",
- "arrayvec",
- "num-bigint",
- "num-integer",
- "num-traits",
- "once_cell",
- "spin",
- "thiserror",
- "triomphe",
- "unicode-normalization",
-]
-
-[[package]]
-name = "quire-semantic-value"
-version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-semantic-value?branch=main#a77e9a0e5d03a089026ee9c8284c7236ac12c9fc"
-dependencies = [
- "quire-canonical",
- "quire-exact",
- "thiserror",
-]
-
-[[package]]
-name = "quire-walk"
-version = "0.1.0"
-source = "git+https://github.com/agent-ix/quire-walk?branch=main#b38a3c9b4341ece401ad1b1e2ae109f4c82bd80e"
 
 [[package]]
 name = "quote"

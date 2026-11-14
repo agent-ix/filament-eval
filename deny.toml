@@ -26,8 +26,8 @@ unknown-registry = "deny"
 unknown-git = "deny"
 allow-git = [
     "https://github.com/agent-ix/ix-trace-rs",
-    "https://github.com/agent-ix/quire-semantic-value",
-    "https://github.com/agent-ix/quire-exact",
-    "https://github.com/agent-ix/quire-walk",
+    "https://github.com/agent-ix/filament-semantic-value",
+    "https://github.com/agent-ix/filament-exact",
+    "https://github.com/agent-ix/filament-walk",
     "https://github.com/agent-ix/quire-canonical",
 ]

@@ -1,13 +1,13 @@
 ---
 type: master-requirements
-name: quire-eval
+name: filament-eval
 org: agent-ix
 component_type: rust-library
 implementation_language: rust
 depends_on:
-  - quire-contract-ir
-  - quire-exact
-  - quire-semantic-value
+  - filament-contract-ir
+  - filament-exact
+  - filament-semantic-value
 standards_alignment:
   - iso-iec-ieee-29148
 ---
@@ -15,15 +15,15 @@ standards_alignment:
 
 ## System Overview
 
-`quire-checked` exposes admitted expression nodes to downstream evaluation
-consumers; `quire-eval` supplies shared evaluation operations and executes
+`filament-checked` exposes admitted expression nodes to downstream evaluation
+consumers; `filament-eval` supplies shared evaluation operations and executes
 checked closures through its scheduler. The requirement inventory covers the
 IEEE vocabulary, connective origin and shared collection removal operations.
 
 ## Purpose
 
 This specification owns the public checked-node vocabulary and evaluation
-interfaces of `quire-eval` and `quire-checked`. The checked-node vocabulary
+interfaces of `filament-eval` and `filament-checked`. The checked-node vocabulary
 retains distinctions established by the authoritative contract-ir operation
 catalogue so that a downstream evaluator can inspect an admitted term without
 reinterpreting its wire form.
@@ -67,6 +67,6 @@ computed from those citations.
 
 ## References
 
-- `ix://agent-ix/quire-contract-ir` — authoritative operation catalogue.
-- `ix://agent-ix/quire-specification/FR-148` — IEEE evaluation semantics.
-- `ix://agent-ix/quire-specification/FR-322` — checked-package operation identities.
+- `ix://agent-ix/filament-contract-ir` — authoritative operation catalogue.
+- `ix://agent-ix/filament-specification/FR-148` — IEEE evaluation semantics.
+- `ix://agent-ix/filament-specification/FR-322` — checked-package operation identities.

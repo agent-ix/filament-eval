@@ -4,14 +4,14 @@ title: Retain connective origin in checked node reads
 type: FR
 status: implemented
 relationships:
-  - target: "ix://agent-ix/quire-eval/US-002"
+  - target: "ix://agent-ix/filament-eval/US-002"
     type: implements
 ---
 # FR-002: Retain connective origin in checked node reads
 
 ## Description
 
-When a checked expression contains a boolean connective, `quire-checked` SHALL
+When a checked expression contains a boolean connective, `filament-checked` SHALL
 store on that node a `ConnectiveOrigin` stated by the producer of the node.
 
 ## Behavior
@@ -37,7 +37,7 @@ The origin is part of node equality: two connective nodes with the same
 operator and operands but different origins are different nodes.
 
 The decision-recording semantics that depend on the origin are specified by the
-requirements of the consuming evaluator (QSL FR-265, to be amended); this
+requirements of the consuming evaluator (FSL FR-265, to be amended); this
 requirement defines only the typed carrier.
 
 ## Acceptance Criteria

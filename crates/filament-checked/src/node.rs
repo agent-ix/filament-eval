@@ -136,6 +136,17 @@ pub enum OrderedKind {
     Quantities,
 }
 
+/// The collection shape admitted by a checked indexing operation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum IndexedKind {
+    /// Position-based sequence indexing.
+    Sequence,
+    /// Position-based ordered-set indexing.
+    OrderedSet,
+    /// Key-based map indexing.
+    Map,
+}
+
 /// The near end of a relationship.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum EndSide {
@@ -347,6 +358,20 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
     IeeeFloat64Fma(RoundingMode, Child, Child, Child),
     /// Quantity arithmetic.
     Quantity(ArithmeticOperator, Child, Child),
+    /// Multiply a quantity by an exact rational factor.
+    QuantityScale {
+        /// The quantity operand.
+        quantity: Child,
+        /// The exact factor operand.
+        factor: Child,
+    },
+    /// Divide a quantity by an exact rational factor.
+    QuantityScaleDiv {
+        /// The quantity operand.
+        quantity: Child,
+        /// The exact factor operand.
+        factor: Child,
+    },
     /// Unary quantity negation in the operand's own unit.
     QuantityNegate(Child),
     /// Exact quantity raised to an integer exponent, in base/exponent order.
@@ -381,6 +406,24 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
         field: RecordField,
         /// Whether the field is optional.
         optional: bool,
+    },
+    /// Project a declaration-order position from a tuple.
+    TupleProject {
+        /// The tuple operand.
+        operand: Child,
+        /// The tuple declaration.
+        declaration: DeclarationKey,
+        /// The declaration-order position.
+        position: usize,
+    },
+    /// Index a collection by a checked index expression.
+    Index {
+        /// The collection operand.
+        collection: Child,
+        /// The index operand.
+        index: Child,
+        /// The admitted collection shape.
+        kind: IndexedKind,
     },
     /// Read a model attribute; `derefed` preserves its explicit-dereference charge.
     Attribute {
@@ -780,6 +823,14 @@ impl<Child, Literal> NodeKind<Child, Literal> {
                 K::IeeeFloat64Fma(*rounding, child(first), child(second), child(third))
             }
             K::Quantity(op, left, right) => K::Quantity(*op, child(left), child(right)),
+            K::QuantityScale { quantity, factor } => K::QuantityScale {
+                quantity: child(quantity),
+                factor: child(factor),
+            },
+            K::QuantityScaleDiv { quantity, factor } => K::QuantityScaleDiv {
+                quantity: child(quantity),
+                factor: child(factor),
+            },
             K::QuantityNegate(value) => K::QuantityNegate(child(value)),
             K::QuantityPower(base, exponent) => K::QuantityPower(child(base), child(exponent)),
             K::ConvertDecimal(value, target) => K::ConvertDecimal(child(value), target.clone()),
@@ -806,6 +857,24 @@ impl<Child, Literal> NodeKind<Child, Literal> {
                 operand: child(operand),
                 field: field.clone(),
                 optional: *optional,
+            },
+            K::TupleProject {
+                operand,
+                declaration,
+                position,
+            } => K::TupleProject {
+                operand: child(operand),
+                declaration: declaration.clone(),
+                position: *position,
+            },
+            K::Index {
+                collection,
+                index,
+                kind,
+            } => K::Index {
+                collection: child(collection),
+                index: child(index),
+                kind: *kind,
             },
             K::Attribute {
                 reference,

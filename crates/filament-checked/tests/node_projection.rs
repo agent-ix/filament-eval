@@ -4,7 +4,7 @@
 use filament_checked::key::DeclarationKey;
 use filament_checked::node::{
     Arithmetic, AuthoredBound, CaseArm, CheckedLiteral, Connective, ConnectiveOrigin, EndSide,
-    IntegerDivisionOperator, OrderedKind, RecordField, RecordSlot, Visit,
+    IndexedKind, IntegerDivisionOperator, OrderedKind, RecordField, RecordSlot, Visit,
 };
 use filament_checked::{NodeKind, NodeRead};
 use filament_exact::{
@@ -140,6 +140,20 @@ fn every_operation_projects_all_children_and_retains_metadata() {
             NodeKind::Quantity(ArithmeticOperator::Add, 1, 2),
             vec![1, 2],
         ),
+        (
+            NodeKind::QuantityScale {
+                quantity: 1,
+                factor: 2,
+            },
+            vec![1, 2],
+        ),
+        (
+            NodeKind::QuantityScaleDiv {
+                quantity: 1,
+                factor: 2,
+            },
+            vec![1, 2],
+        ),
         (NodeKind::ConvertDecimal(1, decimal.clone()), vec![1]),
         (
             NodeKind::Order(OrderingOperator::Less, OrderedKind::Integers, 1, 2),
@@ -171,6 +185,22 @@ fn every_operation_projects_all_children_and_retains_metadata() {
                 optional: true,
             },
             vec![1],
+        ),
+        (
+            NodeKind::TupleProject {
+                operand: 1,
+                declaration: declaration.clone(),
+                position: 3,
+            },
+            vec![1],
+        ),
+        (
+            NodeKind::Index {
+                collection: 1,
+                index: 2,
+                kind: IndexedKind::Map,
+            },
+            vec![1, 2],
         ),
         (
             NodeKind::Attribute {
@@ -391,7 +421,7 @@ fn every_operation_projects_all_children_and_retains_metadata() {
         ),
     ];
 
-    assert_eq!(cases.len(), 67, "a canonical variant was omitted");
+    assert_eq!(cases.len(), 71, "a canonical variant was omitted");
     for (stored, expected_children) in cases {
         let mut seen = Vec::new();
         let mut literal_reads = 0;

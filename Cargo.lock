@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "filament-checked"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "filament-exact",
  "filament-semantic-value",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "filament-eval"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "filament-exact",
  "filament-semantic-value",
@@ -89,8 +89,8 @@ dependencies = [
 
 [[package]]
 name = "filament-exact"
-version = "0.1.0"
-source = "git+https://github.com/agent-ix/filament-exact?branch=main#98a815d3e759ca8f95df3249138bfb03c6fcb116"
+version = "0.2.0"
+source = "git+https://github.com/agent-ix/filament-exact?tag=v0.2.0#cb0125726adfdae578849fb422aba42df04074d7"
 dependencies = [
  "allocator-api2",
  "arrayvec",
@@ -106,8 +106,8 @@ dependencies = [
 
 [[package]]
 name = "filament-semantic-value"
-version = "0.1.0"
-source = "git+https://github.com/agent-ix/filament-semantic-value?branch=main#ad1c93f31f7e417aec27afbf06bfba6dfd7ba7c8"
+version = "0.1.2"
+source = "git+https://github.com/agent-ix/filament-semantic-value?tag=v0.1.2#832bacad711b69ee519a8070e755f0d9102a6f19"
 dependencies = [
  "filament-exact",
  "quire-canonical",
@@ -116,8 +116,8 @@ dependencies = [
 
 [[package]]
 name = "filament-walk"
-version = "0.1.0"
-source = "git+https://github.com/agent-ix/filament-walk?branch=main#f7c0da9361597200ca7d01b1ef9f938578f4dc1f"
+version = "0.1.1"
+source = "git+https://github.com/agent-ix/filament-walk?tag=v0.1.1#6b37f032708dd0a3be9fd82f595641f9574af4fe"
 
 [[package]]
 name = "generic-array"
@@ -132,7 +132,7 @@ dependencies = [
 [[package]]
 name = "ix-trace-rs"
 version = "0.1.2"
-source = "git+https://github.com/agent-ix/ix-trace-rs?branch=main#e29cc07f70394ff018884d12406c1e150bded5f4"
+source = "git+https://github.com/agent-ix/ix-trace-rs?tag=v0.1.2#e29cc07f70394ff018884d12406c1e150bded5f4"
 
 [[package]]
 name = "libc"
@@ -185,8 +185,8 @@ dependencies = [
 
 [[package]]
 name = "quire-canonical"
-version = "0.3.0"
-source = "git+https://github.com/agent-ix/quire-canonical?branch=main#35987f1dea33edf13bdf8e6a39153a802503f5a0"
+version = "0.3.1"
+source = "git+https://github.com/agent-ix/quire-canonical?tag=v0.3.1#2204c5c3fc0ca13dd655400d94e923edd2e8416c"
 dependencies = [
  "quire-canonical-derive",
  "ryu-js",
@@ -198,7 +198,7 @@ dependencies = [
 [[package]]
 name = "quire-canonical-derive"
 version = "0.3.0"
-source = "git+https://github.com/agent-ix/quire-canonical?branch=main#35987f1dea33edf13bdf8e6a39153a802503f5a0"
+source = "git+https://github.com/agent-ix/quire-canonical?tag=v0.3.1#2204c5c3fc0ca13dd655400d94e923edd2e8416c"
 dependencies = [
  "proc-macro2",
  "quote",

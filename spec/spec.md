@@ -46,8 +46,16 @@ descriptor and borrowed read are specified in
 [FR-006](functional/FR-006-quantity-negation-node.md). The unsupported-entry and prepare-limit call failures are specified in
 [FR-007](functional/FR-007-unsupported-entry-and-prepare-limit-failures.md). The
 in-process clock-place-reference descriptor and projection are specified in
-[FR-008](functional/FR-008-clock-place-reference-node.md). Other crate behavior
-remains outside this requirement inventory.
+[FR-008](functional/FR-008-clock-place-reference-node.md). The tuple-projection
+and collection-index descriptors are specified in
+[FR-009](functional/FR-009-tuple-project-and-index-nodes.md), and the
+quantity-scaling descriptors in
+[FR-010](functional/FR-010-quantity-scale-nodes.md). The session's
+live-occurrence limit is specified in
+[FR-011](functional/FR-011-live-occurrence-limit.md), and the call depth an
+evaluation reports in [FR-012](functional/FR-012-evaluation-frame-depth.md).
+Test cases TC-001 to TC-004 under `test-cases/` verify FR-009 to FR-012.
+Other crate behavior remains outside this requirement inventory.
 
 The IEEE arithmetic, comparison, rounding, and diagnostic semantics remain
 owned by QSpec; contract-ir owns operation identity and admission. This

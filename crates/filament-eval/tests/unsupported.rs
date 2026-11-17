@@ -8,6 +8,7 @@ use filament_eval::{
 use filament_exact::{DecimalType, Integer, NodeKey, PathSegment, RoundingMode, ValueType};
 use filament_semantic_value::catalog::Category;
 use filament_semantic_value::location::{ExpressionLocation, ExpressionOwner};
+use ix_trace_rs::trace;
 
 fn location() -> ExpressionLocation {
     ExpressionLocation::at(ExpressionOwner::Expression, &[2, 0])
@@ -59,7 +60,8 @@ fn an_untranslatable_entry_carries_backend_construct_name_and_location() {
     assert_eq!(payload.location, Some(&location()));
 }
 
-/// Trace: FR-007-AC-2.
+/// Provenance: QSL-2379
+#[trace("FR-007-AC-2")]
 #[test]
 fn a_value_type_and_an_operation_construct_name_their_kind() {
     let decimal = DecimalType::new(
@@ -76,6 +78,14 @@ fn a_value_type_and_an_operation_construct_name_their_kind() {
     let payload = by_type.payload();
     assert_eq!(payload.construct, Some("value-type"));
     assert_eq!(payload.construct_name.as_deref(), Some("Decimal"));
+
+    for (value_type, name) in [
+        (ValueType::Bytes, "Bytes"),
+        (ValueType::JsonObject, "JsonObject"),
+    ] {
+        let entry = untranslatable(UntranslatableConstruct::ValueType(Box::new(value_type)));
+        assert_eq!(entry.payload().construct_name.as_deref(), Some(name));
+    }
 
     let key = node_key();
     let by_operation = untranslatable(UntranslatableConstruct::Operation(key.clone()));

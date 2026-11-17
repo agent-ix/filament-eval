@@ -90,6 +90,8 @@ const fn value_type_name(value_type: &ValueType) -> &'static str {
         ValueType::Quantity(_) => "Quantity",
         ValueType::CarriedQuantity(_) => "CarriedQuantity",
         ValueType::Text(_) => "Text",
+        ValueType::Bytes => "Bytes",
+        ValueType::JsonObject => "JsonObject",
         ValueType::String => "String",
         ValueType::Uuid => "Uuid",
         ValueType::Timestamp => "Timestamp",

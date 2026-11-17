@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "filament-checked"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "filament-exact",
  "filament-semantic-value",
@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "filament-eval"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "filament-exact",
  "filament-semantic-value",
@@ -89,8 +89,8 @@ dependencies = [
 
 [[package]]
 name = "filament-exact"
-version = "0.2.0"
-source = "git+https://github.com/agent-ix/filament-exact?tag=v0.2.0#cb0125726adfdae578849fb422aba42df04074d7"
+version = "0.3.0"
+source = "git+https://github.com/agent-ix/filament-exact?tag=v0.3.0#086c11fc6b6a4db85e55749968fb6ca7894ed342"
 dependencies = [
  "allocator-api2",
  "arrayvec",
@@ -106,8 +106,8 @@ dependencies = [
 
 [[package]]
 name = "filament-semantic-value"
-version = "0.1.2"
-source = "git+https://github.com/agent-ix/filament-semantic-value?tag=v0.1.2#832bacad711b69ee519a8070e755f0d9102a6f19"
+version = "0.1.3"
+source = "git+https://github.com/agent-ix/filament-semantic-value?tag=v0.1.3#96a948532d8922c8e1df4a70b7d212a1a4bc59c2"
 dependencies = [
  "filament-exact",
  "quire-canonical",

@@ -77,6 +77,14 @@ fn a_value_type_and_an_operation_construct_name_their_kind() {
     assert_eq!(payload.construct, Some("value-type"));
     assert_eq!(payload.construct_name.as_deref(), Some("Decimal"));
 
+    for (value_type, name) in [
+        (ValueType::Bytes, "Bytes"),
+        (ValueType::JsonObject, "JsonObject"),
+    ] {
+        let entry = untranslatable(UntranslatableConstruct::ValueType(Box::new(value_type)));
+        assert_eq!(entry.payload().construct_name.as_deref(), Some(name));
+    }
+
     let key = node_key();
     let by_operation = untranslatable(UntranslatableConstruct::Operation(key.clone()));
     let payload = by_operation.payload();

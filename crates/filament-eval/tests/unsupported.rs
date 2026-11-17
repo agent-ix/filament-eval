@@ -8,6 +8,7 @@ use filament_eval::{
 use filament_exact::{DecimalType, Integer, NodeKey, PathSegment, RoundingMode, ValueType};
 use filament_semantic_value::catalog::Category;
 use filament_semantic_value::location::{ExpressionLocation, ExpressionOwner};
+use ix_trace_rs::trace;
 
 fn location() -> ExpressionLocation {
     ExpressionLocation::at(ExpressionOwner::Expression, &[2, 0])
@@ -59,7 +60,8 @@ fn an_untranslatable_entry_carries_backend_construct_name_and_location() {
     assert_eq!(payload.location, Some(&location()));
 }
 
-/// Trace: FR-007-AC-2.
+/// Provenance: QSL-2379
+#[trace("FR-007-AC-2")]
 #[test]
 fn a_value_type_and_an_operation_construct_name_their_kind() {
     let decimal = DecimalType::new(

@@ -14,11 +14,11 @@ through the toy closure of the scheduler tests.
 
 ## Test Procedure
 
-1. Run the recursive `count` of 600,000 and of 1,000 calls under
+1. Run `count(600000)` (600,001 calls) and `count(1000)` (1,001 calls) under
    `SessionLimits::default()` on a meter with `work_units` `u64::MAX`; read
    the outcome, its `Incomplete` fields, location and the spent
    `function.call` units.
-2. Run the 600,000-call recursion under `live_occurrences` 4,000,000 and a
+2. Run `count(600000)` under `live_occurrences` 4,000,000 and a
    one-argument call under 0; read `peak_live_occurrences`.
 3. Run a body calling a one-argument callee ten times in sequence under 4,
    with interpreted and with host-body callees.
@@ -30,7 +30,7 @@ through the toy closure of the scheduler tests.
 
 Step 1 stops `Incomplete` with `LiveOccurrences`, `limit` 1,048,576,
 `consumed` 1,048,576, `next_charge` 2 and `FunctionCall` at the 524,289th call,
-with 524,289 `function.call` units spent; 1,000 calls complete. Step 2
+with 524,289 `function.call` units spent; `count(1000)` completes. Step 2
 completes with peak 1,200,002 and stops at the root with `consumed` 0 and
 `next_charge` 2. Step 3 completes with peak 4. Step 4 counts 6 for the frame
 and stops with `consumed` 4, `next_charge` 2. No outcome is a `CallFailure`,

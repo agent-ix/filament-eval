@@ -42,21 +42,15 @@ operand order as quantity then factor makes `2 * d` and `d * 2` one node.
    quantity operand's `Quantity<u>` type (`result operand:0`).
 3. The descriptor SHALL not choose a unit, convert a magnitude, evaluate the
    operation or infer admission from its shape.
-4. An evaluator consuming either node SHALL complete `quantity` and then
-   `factor`; the first stopped operand propagates and the other is not
-   evaluated.
-5. `QuantityScale` SHALL complete with the exact rational product of the
-   quantity's value in `u` and the factor, in the unit `u` (no root-unit
-   conversion). It carries no obligation.
-6. `QuantityScaleDiv` SHALL complete with the exact rational quotient of the
-   quantity's value in `u` and the factor, in the unit `u`. It carries the
+4. `QuantityScale` carries no obligation. `QuantityScaleDiv` carries the
    FSpec FR-146 nonzero obligation on `factor`, which a linked body has
-   proved. A zero factor, which only direct kernel evaluation of an unlinked
-   body meets, SHALL return `Undefined::DivisionByZero` located at the node,
-   after both operands complete and before any scaling charge, with no value.
-7. A completed scaling SHALL charge, after both operands complete and in this
-   order, one `unit.identity-read`, one `unit.rational-arithmetic` computed in
-   `u`, and `unit.result-retain`, and traverses no unit edge.
+   proved; the descriptor holds no obligation field.
+5. This crate does not evaluate either node: no evaluation entry of
+   `filament-eval` interprets a `NodeKind`. FSL's checked closure evaluates
+   both under FSL FR-680, with the operand order, unit-preserving exact
+   values, `unit.identity-read`, `unit.rational-arithmetic` and
+   `unit.result-retain` charges and zero-divisor outcome of FSpec FR-142
+   "Quantity scaling" and FR-142-AC-41.
 
 ## Acceptance Criteria
 
@@ -64,8 +58,6 @@ operand order as quantity then factor makes `2 * d` and `d * 2` one node.
 | --- | --- | --- |
 | FR-010-AC-1 | `QuantityScale` and `QuantityScaleDiv` reads each retain their distinct operation and map `quantity` before `factor`, each exactly once, including when the stored handles have descending indices; neither compares equal to `Quantity` multiplication or division over the same handles, nor to each other. | Test (TC-002) |
 | FR-010-AC-2 | Each read borrows the supplied checked result type and location without reconstructing either; neither descriptor has a unit, law, mode, member or magnitude field. | Test (TC-002) |
-| FR-010-AC-3 | With the unit `ms` (target `s`, scale `1/1000`) and `d = 3 ms`, `k = 4`: `QuantityScale(d, 2)` (the node of both `d * 2` and `2 * d`) completes `6 ms`, `QuantityScale(d, k)` `12 ms`, `QuantityScale(d, rational(1, 2))` `3/2 ms` and `QuantityScale(d, decimal(15, 1))` `9/2 ms`; `QuantityScaleDiv(d, 2)` completes `3/2 ms` and `QuantityScaleDiv(d, k)` `3/4 ms`; every result is in `ms`, and each charges exactly one `unit.identity-read`, one `unit.rational-arithmetic` and `unit.result-retain`. | Test (TC-002) |
-| FR-010-AC-4 | Under direct kernel evaluation, `QuantityScaleDiv(d, 0)` returns `Undefined::DivisionByZero` located at the node, with no value and no `unit.identity-read`, `unit.rational-arithmetic` or `unit.result-retain` charge; a stopped `quantity` operand propagates without evaluating `factor`. | Test (TC-002) |
 
 ## Dependencies
 
@@ -73,4 +65,4 @@ operand order as quantity then factor makes `2 * d` and `d * 2` one node.
 - QSpec FR-322 "Quantity scaling" owns the application shapes, argument order and `result operand:0` typing.
 - QSpec FR-146 owns the nonzero obligation.
 - Contract-IR owns admission and the projection of both applications into these nodes.
-- `filament-semantic-value` owns the quantity value operations; FSL owns lowering and the evaluator that consumes the nodes.
+- FSL FR-680 owns lowering of `q * n`, `n * q` and `q / n` and the evaluation of both nodes, with its values, charges and zero-divisor outcome; `filament-semantic-value` owns the quantity value operations it uses.

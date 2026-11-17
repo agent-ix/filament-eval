@@ -8,8 +8,8 @@ use filament_exact::{ChargePoint, Outcome};
 use ix_trace_rs::trace;
 use support::{completed_int, count, int, meter, spent, Toy};
 
-/// Recursion depth whose frames (two occurrences each) pass the default
-/// limit of 1,048,576 at the 524,289th call.
+/// `count(DEEP)` makes DEEP + 1 = 600,001 calls; their frames (two
+/// occurrences each) pass the default limit of 1,048,576 at the 524,289th call.
 const DEEP: u64 = 600_000;
 
 #[trace("TC-003", "FR-011-AC-1")]

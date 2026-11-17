@@ -82,6 +82,12 @@ pub fn population() -> NodeKey {
 pub fn absent() -> NodeKey {
     key(99)
 }
+pub fn recursive_undefined() -> NodeKey {
+    key(11)
+}
+pub fn completed_depth() -> NodeKey {
+    key(12)
+}
 
 pub fn signature_of_arity(arity: usize) -> Signature {
     Signature::new(vec![ValueType::Integer; arity], ValueType::Integer)
@@ -180,6 +186,8 @@ pub enum Task {
     },
     /// Admitted but never given an interpreted body.
     Bodiless,
+    RecursiveUndefined,
+    CompletedDepth,
 }
 
 /// The callables entered, in order, with their integer arguments.
@@ -217,16 +225,14 @@ impl Toy {
             ranged(),
             storage(),
             population(),
+            recursive_undefined(),
+            completed_depth(),
         ]
         .contains(callable)
     }
 
     fn arity(callable: &NodeKey) -> usize {
-        if *callable == add() {
-            2
-        } else {
-            1
-        }
+        if *callable == add() { 2 } else { 1 }
     }
 }
 
@@ -342,6 +348,10 @@ impl CheckedClosure for Toy {
             Task::Refuse
         } else if *callable == lossy() {
             Task::Lossy
+        } else if *callable == recursive_undefined() {
+            Task::RecursiveUndefined
+        } else if *callable == completed_depth() {
+            Task::CompletedDepth
         } else {
             Task::Bodiless
         };
@@ -399,10 +409,33 @@ impl CheckedClosure for Toy {
                     site: count_site(argument - 1),
                 })),
             },
+            Task::RecursiveUndefined => match delivered {
+                Some(child) => Ok(Transition::Done(child)),
+                None if argument <= 1 => Ok(Transition::Done(Evaluation {
+                    outcome: FamilyOutcome::Evaluated(Outcome::Undefined(
+                        Undefined::DivisionByZero,
+                    )),
+                    location: Some(site()),
+                    losses: Vec::new(),
+                    frame_depth: 0,
+                })),
+                None => Ok(Transition::Call(ChildRequest {
+                    callee: recursive_undefined(),
+                    arguments: vec![int(argument - 1)],
+                    site: count_site(argument - 1),
+                })),
+            },
+            Task::CompletedDepth => Ok(Transition::Done(Evaluation {
+                outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
+                location: None,
+                losses: Vec::new(),
+                frame_depth: 7,
+            })),
             Task::Boom => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Undefined(Undefined::DivisionByZero)),
                 location: Some(site()),
                 losses: Vec::new(),
+                frame_depth: 0,
             })),
             Task::Add => Ok(Transition::Done(Evaluation::completed(int(integers(
                 arguments,
@@ -418,11 +451,13 @@ impl CheckedClosure for Toy {
                 )),
                 location: Some(site()),
                 losses: Vec::new(),
+                frame_depth: 0,
             })),
             Task::Lossy => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
                 location: None,
                 losses: vec![loss()],
+                frame_depth: 0,
             })),
             Task::Nested {
                 outer,
@@ -594,6 +629,7 @@ impl ChargingBody {
             outcome: FamilyOutcome::Evaluated(Outcome::Incomplete(denied)),
             location: Some(site()),
             losses: Vec::new(),
+            frame_depth: 0,
         }))
     }
 }
@@ -618,6 +654,7 @@ impl Body for ChargingBody {
                     outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(value + self.saved))),
                     location: None,
                     losses: child.losses,
+                    frame_depth: 0,
                 },
                 None => *child,
             })),

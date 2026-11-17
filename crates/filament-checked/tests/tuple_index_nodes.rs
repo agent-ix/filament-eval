@@ -2,28 +2,105 @@
 //! FR-009 (TC-001): the tuple-projection and collection-index descriptors and
 //! their borrowed projections. FSL evaluates the nodes (its FR-680).
 //!
-//! `NodeKind::TupleProject`, `NodeKind::Index` and `IndexedKind` do not exist
-//! yet, so each stub states the decided assertion and fails until the code
-//! ticket adds them.
-
+use filament_checked::NodeKind;
+use filament_checked::key::DeclarationKey;
+use filament_checked::node::{IndexedKind, RecordField};
+use filament_exact::{NodeKey, PathSegment, ValueType};
+use filament_semantic_value::location::{ExpressionLocation, ExpressionOwner};
 use ix_trace_rs::trace;
 
 #[trace("TC-001", "FR-009-AC-1")]
 #[test]
-#[ignore = "QSL-2171: NodeKind::TupleProject{operand, declaration, position} not implemented yet"]
 fn tuple_project_read_maps_its_operand_once_and_keeps_its_position() {
-    // NodeRead::from_stored(&NodeKind::TupleProject { operand: NodeId(9),
-    // declaration: P, position: 1 }, ..) visits [9], yields operand 29,
-    // keeps P and 1, borrows type/location, and differs from Field and Index.
-    panic!("NodeKind::TupleProject is not in the checked vocabulary");
+    let declaration = DeclarationKey {
+        package: "fixture".into(),
+        node: "tuple".into(),
+    };
+    let stored: NodeKind<usize> = NodeKind::TupleProject {
+        operand: 9,
+        declaration: declaration.clone(),
+        position: 1,
+    };
+    let mut visited = Vec::new();
+    let read = stored.map_ref(
+        |child| {
+            visited.push(*child);
+            *child + 20
+        },
+        |_| (),
+    );
+    assert_eq!(visited, [9]);
+    assert_eq!(
+        read,
+        NodeKind::TupleProject {
+            operand: 29,
+            declaration: declaration.clone(),
+            position: 1,
+        }
+    );
+    let value_type = ValueType::Boolean;
+    let location = ExpressionLocation::root(ExpressionOwner::Expression);
+    let borrowed = filament_checked::NodeRead {
+        operation: NodeKind::TupleProject {
+            operand: 29,
+            declaration: declaration.clone(),
+            position: 1,
+        },
+        value_type: &value_type,
+        location: &location,
+    };
+    assert!(core::ptr::eq(borrowed.value_type, &value_type));
+    assert!(core::ptr::eq(borrowed.location, &location));
+    assert_ne!(
+        read,
+        NodeKind::Field {
+            operand: 29,
+            field: RecordField::new(
+                NodeKey::new("fixture", vec![PathSegment::Text("record".into())], 0).unwrap(),
+                "field",
+            ),
+            optional: false,
+        }
+    );
+    assert_ne!(
+        read,
+        NodeKind::TupleProject {
+            operand: 29,
+            declaration,
+            position: 2,
+        }
+    );
 }
 
 #[trace("TC-001", "FR-009-AC-2")]
 #[test]
-#[ignore = "QSL-2171: NodeKind::Index{collection, index, kind: IndexedKind} not implemented yet"]
 fn index_read_maps_collection_then_index_and_keeps_its_kind() {
-    // For each IndexedKind::{Sequence, OrderedSet, Map}, Index { collection:
-    // NodeId(9), index: NodeId(4), kind } visits [9, 4] and keeps kind; the
-    // enum has exactly those three kinds.
-    panic!("NodeKind::Index and IndexedKind are not in the checked vocabulary");
+    for kind in [
+        IndexedKind::Sequence,
+        IndexedKind::OrderedSet,
+        IndexedKind::Map,
+    ] {
+        let stored: NodeKind<usize> = NodeKind::Index {
+            collection: 9,
+            index: 4,
+            kind,
+        };
+        let mut visited = Vec::new();
+        let read = stored.map_ref(
+            |child| {
+                visited.push(*child);
+                *child + 20
+            },
+            |_| (),
+        );
+        assert_eq!(visited, [9, 4]);
+        assert_eq!(
+            read,
+            NodeKind::Index {
+                collection: 29,
+                index: 24,
+                kind,
+            }
+        );
+    }
 }

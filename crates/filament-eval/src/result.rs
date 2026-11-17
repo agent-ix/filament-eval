@@ -91,6 +91,9 @@ pub struct Evaluation {
     /// The loss records of the operations a completed evaluation performed,
     /// in evaluation order; empty unless completed.
     pub losses: Vec<LocatedLoss>,
+    /// The number of caller frames above the call where a non-completed
+    /// outcome originated. Completed outcomes always have depth zero.
+    pub frame_depth: u32,
 }
 
 /// The locus named by an admission failure for a checked package call.
@@ -276,6 +279,7 @@ impl Evaluation {
             outcome: FamilyOutcome::Evaluated(Outcome::Completed(value)),
             location: None,
             losses: Vec::new(),
+            frame_depth: 0,
         }
     }
 }

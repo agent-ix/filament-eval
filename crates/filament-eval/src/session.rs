@@ -139,7 +139,7 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                     Resume::Child(evaluation) => Some(*evaluation),
                     Resume::Again => None,
                     Resume::Start(_) => {
-                        return Err(fault("interpreted-frame-resumed-with-start").into())
+                        return Err(fault("interpreted-frame-resumed-with-start").into());
                     }
                 };
                 self.closure
@@ -154,10 +154,19 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                 // charges and pushes the callee.
                 self.entry = Some(Entry::Request(request));
             }
-            Transition::Done(evaluation) => {
+            Transition::Done(mut evaluation) => {
+                let completed = is_completed(&evaluation);
+                if completed {
+                    evaluation.frame_depth = 0;
+                }
                 self.frames.pop();
                 match self.frames.last_mut() {
-                    Some(caller) => caller.input = Resume::Child(Box::new(evaluation)),
+                    Some(caller) => {
+                        if !completed {
+                            evaluation.frame_depth = evaluation.frame_depth.saturating_add(1);
+                        }
+                        caller.input = Resume::Child(Box::new(evaluation));
+                    }
                     None => return Ok(Some(evaluation)),
                 }
             }
@@ -221,7 +230,9 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
         site: Option<ExpressionLocation>,
     ) -> Result<Option<Evaluation>, CallFailure> {
         if let Err(denied) = self.meter.charge(Charge::new(ChargePoint::FunctionCall)) {
-            return Ok(Some(Self::incomplete(denied, site)));
+            let frame_depth =
+                u32::try_from(self.frames.len().saturating_sub(1)).unwrap_or(u32::MAX);
+            return Ok(Some(Self::incomplete(denied, site, frame_depth)));
         }
         let frame = match self.bindings.get(&callable) {
             Some(factory) => Frame {
@@ -245,13 +256,25 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
     /// cancellation handle denied is a denied charge like any other
     /// (FR-262): earlier spend is retained, the denied charge is unrecorded,
     /// and the handle's `tripped()` reports the cause for the caller to read.
-    fn incomplete(denied: Incomplete, site: Option<ExpressionLocation>) -> Evaluation {
+    fn incomplete(
+        denied: Incomplete,
+        site: Option<ExpressionLocation>,
+        frame_depth: u32,
+    ) -> Evaluation {
         Evaluation {
             outcome: FamilyOutcome::Evaluated(Outcome::Incomplete(denied)),
             location: site,
             losses: Vec::new(),
+            frame_depth,
         }
     }
+}
+
+fn is_completed(evaluation: &Evaluation) -> bool {
+    matches!(
+        &evaluation.outcome,
+        FamilyOutcome::Evaluated(Outcome::Completed(_))
+    )
 }
 
 /// A broken scheduler invariant, never a caller-input refusal.

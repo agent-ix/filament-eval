@@ -486,6 +486,8 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
     },
     /// Convert an equality operand's scalar.
     ConvertScalar(EqualityOperand, Child),
+    /// Convert a Text or String operand to a numeric value.
+    ConvertText(ValueType, Child),
     /// Convert an IEEE value to an exact rational.
     IeeeToRational(Child, RationalDomain),
     /// Run a one-binder query.
@@ -905,6 +907,7 @@ impl<Child, Literal> NodeKind<Child, Literal> {
                 operand: child(operand),
             },
             K::ConvertScalar(target, value) => K::ConvertScalar(target.clone(), child(value)),
+            K::ConvertText(target, value) => K::ConvertText(target.clone(), child(value)),
             K::IeeeToRational(value, domain) => K::IeeeToRational(child(value), domain.clone()),
             K::Query {
                 visit,

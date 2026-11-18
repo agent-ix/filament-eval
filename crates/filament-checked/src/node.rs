@@ -276,6 +276,17 @@ pub enum Visit {
 pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
     /// A literal value.
     Literal(Literal),
+    /// A reference literal whose object identity is pending subject binding.
+    ///
+    /// `object_type` is the effective model-object type identity. `identity`
+    /// contains the literal key's UTF-8 bytes. This is intentionally distinct
+    /// from a resolved `ObjectReference` value.
+    ReferenceLiteral {
+        /// The effective identity of the referenced model-object type.
+        object_type: EffectiveId,
+        /// The literal key's UTF-8 bytes, unresolved relative to a subject.
+        identity: Vec<u8>,
+    },
     /// Narrow an integer to an admitted interval.
     Coerce(Child, IntegerInterval),
     /// Read a local slot.
@@ -750,6 +761,13 @@ impl<Child, Literal> NodeKind<Child, Literal> {
         use NodeKind as K;
         match self {
             K::Literal(value) => K::Literal(literal(value)),
+            K::ReferenceLiteral {
+                object_type,
+                identity,
+            } => K::ReferenceLiteral {
+                object_type: object_type.clone(),
+                identity: identity.clone(),
+            },
             K::Coerce(value, domain) => K::Coerce(child(value), domain.clone()),
             K::Local(slot) => K::Local(*slot),
             K::Let { slot, value, body } => K::Let {

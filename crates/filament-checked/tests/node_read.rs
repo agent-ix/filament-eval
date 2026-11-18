@@ -2,9 +2,68 @@
 //! FR-400 canonical operation projection tests.
 
 use filament_checked::node::{CaseArm, CheckedLiteral, RecordSlot};
-use filament_checked::{NodeKind, NodeRead};
-use filament_exact::{Value, ValueType};
+use filament_checked::{construct, NodeKind, NodeRead};
+use filament_exact::{EffectiveId, OriginalDeclarationKey, Value, ValueType};
 use filament_semantic_value::location::{ExpressionLocation, ExpressionOwner};
+use ix_trace_rs::trace;
+
+/// Provenance: QSL-2395
+/// Trace: FR-400-AC-11
+#[trace("FR-400-AC-11")]
+#[test]
+fn pending_reference_literal_constructs_and_survives_reader_projection() {
+    let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));
+    let identity = b"a".to_vec();
+    let stored = construct::reference_literal(object_type.clone(), identity.clone())
+        .expect("non-empty reference identity is valid");
+    let value_type = ValueType::Reference(object_type.clone());
+    let location = ExpressionLocation::root(ExpressionOwner::Expression);
+
+    let read = NodeRead::<usize>::from_stored(&stored, &value_type, &location, |_| {
+        unreachable!("reference literals have no child operands")
+    });
+    let NodeKind::ReferenceLiteral {
+        object_type: read_type,
+        identity: read_identity,
+    } = &read.operation
+    else {
+        panic!("pending reference literal changed operation")
+    };
+    assert_eq!(read_type, &object_type);
+    assert_eq!(read_identity, &identity);
+    assert_eq!(read.value_type, &ValueType::Reference(object_type.clone()));
+
+    let round_trip = read.operation.map_ref(|child| *child, |value| *value);
+    let NodeKind::ReferenceLiteral {
+        object_type: round_trip_type,
+        identity: round_trip_identity,
+    } = round_trip
+    else {
+        panic!("pending reference literal changed operation on round-trip")
+    };
+    assert_eq!(round_trip_type, object_type);
+    assert_eq!(round_trip_identity, identity);
+}
+
+/// Provenance: QSL-2395
+#[test]
+fn pending_reference_literal_refuses_empty_identity() {
+    let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));
+    assert_eq!(
+        construct::reference_literal(object_type, Vec::new()),
+        Err(construct::ReferenceLiteralError::EmptyIdentity)
+    );
+}
+
+/// Provenance: QSL-2395
+#[test]
+fn pending_reference_literal_refuses_non_utf8_identity() {
+    let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));
+    assert_eq!(
+        construct::reference_literal(object_type, vec![0xff]),
+        Err(construct::ReferenceLiteralError::InvalidIdentityEncoding)
+    );
+}
 
 /// Trace: FR-400-AC-11
 #[test]

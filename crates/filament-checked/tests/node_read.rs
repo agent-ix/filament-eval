@@ -32,7 +32,7 @@ fn pending_reference_literal_constructs_and_survives_reader_projection() {
     assert_eq!(read_identity, &identity);
     assert_eq!(read.value_type, &ValueType::Reference(object_type.clone()));
 
-    let round_trip = read.operation.map_ref(|child| *child, |value| value);
+    let round_trip = read.operation.map_ref(|child| *child, |value| *value);
     assert_eq!(round_trip, read.operation);
 }
 

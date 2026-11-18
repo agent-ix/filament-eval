@@ -2,9 +2,8 @@
 //! FR-009 (TC-001): the tuple-projection and collection-index descriptors and
 //! their borrowed projections. FSL evaluates the nodes (its FR-680).
 //!
-use filament_checked::NodeKind;
-use filament_checked::key::DeclarationKey;
 use filament_checked::node::{IndexedKind, RecordField};
+use filament_checked::NodeKind;
 use filament_exact::{NodeKey, PathSegment, ValueType};
 use filament_semantic_value::location::{ExpressionLocation, ExpressionOwner};
 use ix_trace_rs::trace;
@@ -12,10 +11,7 @@ use ix_trace_rs::trace;
 #[trace("TC-001", "FR-009-AC-1")]
 #[test]
 fn tuple_project_read_maps_its_operand_once_and_keeps_its_position() {
-    let declaration = DeclarationKey {
-        package: "fixture".into(),
-        node: "tuple".into(),
-    };
+    let declaration = NodeKey::new("fixture", vec![PathSegment::Text("tuple".into())], 0).unwrap();
     let stored: NodeKind<usize> = NodeKind::TupleProject {
         operand: 9,
         declaration: declaration.clone(),

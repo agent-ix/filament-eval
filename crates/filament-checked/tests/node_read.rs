@@ -7,8 +7,9 @@ use filament_exact::{EffectiveId, OriginalDeclarationKey, Value, ValueType};
 use filament_semantic_value::location::{ExpressionLocation, ExpressionOwner};
 use ix_trace_rs::trace;
 
-/// Trace: FR-1000-AC-2, QSL-2395
-#[trace("FR-1000-AC-2")]
+/// Provenance: QSL-2395
+/// Trace: FR-400-AC-11
+#[trace("FR-400-AC-11")]
 #[test]
 fn pending_reference_literal_constructs_and_survives_reader_projection() {
     let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));
@@ -44,14 +45,23 @@ fn pending_reference_literal_constructs_and_survives_reader_projection() {
     assert_eq!(round_trip_identity, identity);
 }
 
-/// Trace: FR-1000-AC-2, QSL-2395
-#[trace("FR-1000-AC-2")]
+/// Provenance: QSL-2395
 #[test]
 fn pending_reference_literal_refuses_empty_identity() {
     let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));
     assert_eq!(
         construct::reference_literal(object_type, Vec::new()),
         Err(construct::ReferenceLiteralError::EmptyIdentity)
+    );
+}
+
+/// Provenance: QSL-2395
+#[test]
+fn pending_reference_literal_refuses_non_utf8_identity() {
+    let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));
+    assert_eq!(
+        construct::reference_literal(object_type, vec![0xff]),
+        Err(construct::ReferenceLiteralError::InvalidIdentityEncoding)
     );
 }
 

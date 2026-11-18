@@ -37,6 +37,8 @@ pub mod construct {
     pub enum ReferenceLiteralError {
         /// The decoded key contained no bytes.
         EmptyIdentity,
+        /// The identity bytes are not valid UTF-8.
+        InvalidIdentityEncoding,
     }
 
     /// Construct a subject-independent reference literal node.
@@ -50,6 +52,9 @@ pub mod construct {
     ) -> Result<NodeKind, ReferenceLiteralError> {
         if identity.is_empty() {
             return Err(ReferenceLiteralError::EmptyIdentity);
+        }
+        if core::str::from_utf8(&identity).is_err() {
+            return Err(ReferenceLiteralError::InvalidIdentityEncoding);
         }
         Ok(NodeKind::ReferenceLiteral {
             object_type,

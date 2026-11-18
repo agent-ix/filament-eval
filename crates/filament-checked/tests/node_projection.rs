@@ -23,6 +23,8 @@ use ix_trace_rs::trace;
 #[test]
 fn every_operation_projects_all_children_and_retains_metadata() {
     let key = NodeKey::new("fixture", vec![PathSegment::Text("node".into())], 0).unwrap();
+    let tuple_declaration =
+        NodeKey::new("fixture", vec![PathSegment::Text("tuple".into())], 0).unwrap();
     let declaration = DeclarationKey {
         package: "fixture".into(),
         node: "object".into(),
@@ -189,7 +191,7 @@ fn every_operation_projects_all_children_and_retains_metadata() {
         (
             NodeKind::TupleProject {
                 operand: 1,
-                declaration: declaration.clone(),
+                declaration: tuple_declaration,
                 position: 3,
             },
             vec![1],

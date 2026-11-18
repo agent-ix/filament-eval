@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/filament-checked", "crates/filament-eval"]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 rust-version = "1.98"
 authors = ["Agent IX <peter@agent-ix.ai>"]

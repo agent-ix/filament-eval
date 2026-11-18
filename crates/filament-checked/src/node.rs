@@ -423,7 +423,7 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
         /// The tuple operand.
         operand: Child,
         /// The tuple declaration.
-        declaration: DeclarationKey,
+        declaration: NodeKey,
         /// The declaration-order position.
         position: usize,
     },

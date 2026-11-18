@@ -33,7 +33,15 @@ fn pending_reference_literal_constructs_and_survives_reader_projection() {
     assert_eq!(read.value_type, &ValueType::Reference(object_type.clone()));
 
     let round_trip = read.operation.map_ref(|child| *child, |value| *value);
-    assert_eq!(round_trip, read.operation);
+    let NodeKind::ReferenceLiteral {
+        object_type: round_trip_type,
+        identity: round_trip_identity,
+    } = round_trip
+    else {
+        panic!("pending reference literal changed operation on round-trip")
+    };
+    assert_eq!(round_trip_type, object_type);
+    assert_eq!(round_trip_identity, identity);
 }
 
 /// Trace: FR-1000-AC-2, QSL-2395

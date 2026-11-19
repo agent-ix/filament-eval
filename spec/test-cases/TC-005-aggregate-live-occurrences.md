@@ -18,7 +18,7 @@ frame kind that evaluates nested calls inside its own transition through
 `nested()`, so the registry path and the native path run over the same
 frames.
 
-Scope: FR-013-AC-1 to FR-013-AC-6.
+Scope: FR-013-AC-1 to FR-013-AC-8.
 
 ## Test Procedure
 
@@ -43,7 +43,13 @@ Scope: FR-013-AC-1 to FR-013-AC-6.
    `N` (4) inside its transition, closes both, and returns `Transition::Call`
    for `D` (2) on a meter granting three `function.call` charges. Separately,
    a host body runs a nested session that peaks at 9 and calls `reach`.
-6. Repeat steps 1, 2, 4 and 5 under the no-std build.
+6. Interpreted root `P` (3) under `live_occurrences` 20 opens `C` (4) and
+   `N` (4) inside its transition and returns `Transition::Call` for `D` (2)
+   with both open; read `Session::live_occurrences` before `D` is entered,
+   `D`'s context, `P`'s next context and the peak. Repeat under 12.
+7. Resume a host body directly with `LiveContext::new(10)`, outside any
+   session, opening frames of 4, 4 and 4.
+8. Repeat steps 1, 2, 4, 5 and 6 under the no-std build.
 
 ## Expected Results
 
@@ -63,6 +69,13 @@ Scope: FR-013-AC-1 to FR-013-AC-6.
   and `count(600000)` gives FR-011-AC-1's results.
 - Step 5: the application ends `Incomplete` at `D`'s `function.call` with
   `peak_live_occurrences` 11; the host body's application reports peak 9.
+- Step 6: the count reads 11, `D` is admitted at 13 and sees `live` 13,
+  `P`'s next context has `live` 11, and the application completes with peak
+  13. Under 12, `D` stops with `consumed` 11, `next_charge` 2 and
+  `frame_depth` 2.
+- Step 7: the first two opens succeed (`live` 8, `peak` 8). The third
+  returns `Incomplete` with `limit` 10, `consumed` 8 and `next_charge` 4,
+  and leaves `live` 8.
 - No outcome is a `CallFailure`, refusal or fault, and both builds agree.
 
 ## Status

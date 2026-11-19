@@ -58,9 +58,15 @@ and the same `frame_depth`.
 
 ### The context a frame runs under
 
-1. `LiveContext` SHALL be a public type with private fields `live`, `limit`
-   and `peak`, each a `u64`, and the read methods `live()`, `limit()` and
-   `peak()`. No public constructor exists; only a session makes one.
+1. `LiveContext` SHALL be a public type with the private `u64` fields `live`,
+   `limit` and `peak`, a private count of the frames opened inside the
+   current transition and still open, and the read methods `live()`, `limit()` and
+   `peak()`. A session makes one for every advance or resume (item 2).
+   `LiveContext::new(limit: u64) -> LiveContext` SHALL be a public
+   constructor with `live` 0 and `peak` 0, for a caller that runs a body
+   outside any session: a generated test helper that calls `Body::resume`
+   directly, or a model-checking harness. A context made by `new` belongs to
+   no application; whatever a body counts in it bounds only that direct call.
 2. `CheckedClosure::advance` SHALL take `context: &mut LiveContext` after
    `delivered`, and `Body::resume` SHALL take `context: &mut LiveContext`
    after `input`: `resume(&mut self, input, context, meter)`. Before each
@@ -76,8 +82,19 @@ and the same `frame_depth`.
    `YieldingBody` and `SitedBody` (`fsl-replay/src/application.rs` tests),
    `ActionBody` (`fsl-replay/tests/it/checked_body_failure.rs`), `RequestBody`
    and `ConstantBody` (`fsl-eval/tests/it/reference_adapter.rs`), and
-   `GeneratedCall` (`tests/fixtures/checked-closure-consumer`). The crate is
-   pre-release, and no compatibility signature is kept.
+   `GeneratedCall` (`tests/fixtures/checked-closure-consumer`). In
+   filament-contract-codegen they are the two generated `impl Body for
+   Invocation` templates (`src/oracle/function/owner_render.rs`, with the
+   rendered-text assertion that pins them) and the test bodies `EchoBody` and
+   `SitedCallBody` (`tests/it/owner_path.rs`). That crate also calls
+   `Body::resume` outside a session, in the generated test helper
+   `invoke_native_body` (`tests/it/exact_function_agreement.rs`) and the Kani
+   harness (`tests/it/kani_function_harness.rs`), which make their context
+   with `LiveContext::new`. Its migration is to render the new `resume`
+   signature, pass a `LiveContext::new` context in those direct calls, and pass
+   `SessionLimits` to FSL's five-argument `ApplicationRegistry::begin_call`
+   (FSL FR-485), all in the change that advances its `filament-eval` pin. The
+   crate is pre-release, and no compatibility signature is kept.
 3. `Session::live_occurrences(&self) -> u64` SHALL return the session's
    current live count, and `Session::limits(&self) -> SessionLimits` the
    limits bound at Begin. Both are reads; neither charges the meter nor
@@ -112,19 +129,29 @@ and the same `frame_depth`.
    before it acts on the transition. A frame's peak therefore covers the calls
    it evaluated inside the transition and the nested sessions it ran. Every
    terminal or delivered `peak_live_occurrences` is the largest count of the
-   whole application. The session reads only `peak` back; frames a transition
-   opened end with that transition.
+   whole application.
+7. A frame that returns `Transition::Continue` or `Transition::Call` while
+   frames it opened inside the transition are still open SHALL carry them to
+   its next transition, and the session SHALL count them meanwhile. After such
+   a return, the session SHALL add the context's `live` minus the `live` it
+   lent to that frame's occurrences on its stack, and add the number of frames
+   still open (`open` adds one, `close` removes one) to that frame's carried
+   frame count. Calls requested meanwhile are tested with the carried
+   occurrences included. The next context lent to the frame includes them,
+   and they leave the count when the frame closes them or is popped. For
+   FR-012, a frame's carried frames count as levels above it. A frame that
+   returns `Transition::Done` ends every frame it opened.
 
 ### Where a live-occurrence stop ends the application
 
-7. A frame that receives `Err(Incomplete)` from `open` SHALL return
+8. A frame that receives `Err(Incomplete)` from `open` SHALL return
    `Transition::Done` with the located `Evaluation` of FR-011 item 7, carrying
    that `Incomplete`, located at the refused call's site with no losses. Its
    `frame_depth` is the number of frames the frame holds open inside the
    transition at that call (FR-012 item 2). A frame that receives a
    live-occurrence `Incomplete` as the result of a nested session SHALL return
    it the same way.
-8. When a frame returns `Transition::Done` whose outcome is
+9. When a frame returns `Transition::Done` whose outcome is
    `Outcome::Incomplete` with `limit_kind: LimitKind::LiveOccurrences`, the
    session SHALL end the application with that evaluation, exactly as it
    ends one at a stop it raises itself (FR-011 item 7). No caller frame is
@@ -137,7 +164,7 @@ and the same `frame_depth`.
 
 ### What does not change
 
-9. The stop is incomplete, never a refusal, a `CallFailure` or an
+10. The stop is incomplete, never a refusal, a `CallFailure` or an
    `InternalFault` (FR-011 item 8). A frame whose calls are all returned as
    `Transition::Call` (requests the session counts) never calls `open`, and
    its context's `peak` stays at `live`. The order at a call stays charge,
@@ -159,7 +186,9 @@ inside one transition.
 | FR-013-AC-3 | Under the registry path of AC-2, `P`'s resume sees `live` 3, and `C`'s advance sees `live` 6 and `limit` 10. A host body that requests `C` twice in sequence sees `live` 6 at each of `C`'s advances, because the first `C` was popped. During the session, `Session::live_occurrences` reads 3 after `P` is pushed, and `Session::limits` returns the limits given at Begin. | Test (TC-005) |
 | FR-013-AC-4 | A session begun inside `C`'s transition in the registry path of AC-2 with `nested()` (`live_occurrences` 10, `held` 6) holds 10 and completes when its root binds a frame of 4. With a root frame of 5 it stops at its root call with `consumed` 6 and `next_charge` 5, and that stop ends the outer application. In the native path, where `P` (3) holds `C` (4) open inside its transition, `nested()` gives `held` 7, not 3: a nested root frame of 3 completes at 10, and one of 4 stops with `consumed` 7. A host body `P` (3) that begins a session with `nested()` gives `held` 3. A session begun with `SessionLimits::default()` has `held` 0, and FR-011-AC-1's results are unchanged. | Test (TC-005) |
 | FR-013-AC-5 | An interpreted root `P` (3) under `live_occurrences` 20 opens `C` (4) and `N` (4) inside its transition, closes both, and then returns `Transition::Call` for `D` (2) on a meter that grants three `function.call` charges. The application ends `Incomplete` at `D`'s `function.call` with `peak_live_occurrences` 11. A host body whose nested session reaches a peak of 9 under `nested()` reports, through `reach`, a terminal peak of 9. | Test (TC-005) |
-| FR-013-AC-6 | No stop of AC-1, AC-2, AC-4 or AC-5 is a `CallFailure`, a refusal or an `InternalFault`, and each outcome is identical under the std and the no-std build. | Test (TC-005) |
+| FR-013-AC-6 | No stop of AC-1, AC-2, AC-4, AC-5 or AC-7 is a `CallFailure`, a refusal or an `InternalFault`, and each outcome is identical under the std and the no-std build. | Test (TC-005) |
+| FR-013-AC-7 | An interpreted root `P` (3) under `live_occurrences` 20 opens `C` (4) and `N` (4) inside its transition and returns `Transition::Call` for `D` (2) with both still open. `Session::live_occurrences` reads 11 before `D` is entered, `D` is admitted at a count of 13, and `D`'s advance sees `live` 13. After `D` returns, `P`'s next context has `live` 11; `P` closes both frames and completes with `peak_live_occurrences` 13. Under `live_occurrences` 12, `D` stops with `consumed` 11, `next_charge` 2 and `frame_depth` 2, and the application ends. | Test (TC-005) |
+| FR-013-AC-8 | `LiveContext::new(10)` has `live` 0, `peak` 0 and `limit` 10. A host body resumed directly with it, outside any session, that opens frames of 4 and 4 gets `Ok` for both (`live` 8, `peak` 8). A third `open` of 4 returns `Incomplete { limit_kind: LiveOccurrences, limit: 10, consumed: 8, next_charge: 4, charge_point: FunctionCall }` and leaves `live` 8. | Test (TC-005) |
 
 ## Dependencies
 

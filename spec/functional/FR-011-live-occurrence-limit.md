@@ -55,7 +55,8 @@ and gives the same result on every platform, unlike a byte or depth count.
 4. The session's live count is `held` plus the sum over every frame on its
    stack; it starts at `held`. A frame that evaluates calls inside one
    transition counts them in the `LiveContext` the session lends it, against
-   the same count and limit (FR-013). A
+   the same count and limit; frames it carries open from one transition to the
+   next stay in the count (FR-013 item 7). A
    frame's occurrences enter the count when it is pushed and leave it when its
    body finishes and the frame is popped, and a dropped session holds none.
    Values a body computes or holds after entry are not counted; the work
@@ -87,7 +88,7 @@ and gives the same result on every platform, unlike a byte or depth count.
    charge stays spent; earlier spend is kept. Suspended frames are released
    without executing their continuations. A live-occurrence `Incomplete`
    that a frame returns from inside its transition ends the application in the
-   same way (FR-013 item 8).
+   same way (FR-013 item 9).
 8. Reaching the limit is incomplete, never a refusal, a `CallFailure` or an
    `InternalFault`, and names no depth or frame count.
 9. The terminal `Evaluation` of every application SHALL carry

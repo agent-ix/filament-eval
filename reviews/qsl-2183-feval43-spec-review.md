@@ -34,3 +34,22 @@ Not mergeable yet: four medium findings. The arithmetic, the ACs' failing power 
 | FND-005 | low | Item 6 reports a frame's in-transition peak only in `Transition::Done`, yet concludes that every terminal evaluation carries the whole application's peak. A frame that evaluates calls inline and then returns `Transition::Call`, followed by a terminal session stop or failure before its `Done`, loses that peak. Folding a nested session's `peak_live_occurrences` into the frame's peak is also unstated | spec/functional/FR-013-aggregate-live-occurrences-across-nested-evaluation.md:83-89 |
 | FND-006 | low | FR-011 items 1, 4 and 9 still define `SessionLimits { live_occurrences: u64 }` and the live count as the sum over the stack's frames. FR-013 adds `held` and in-transition frames without amending FR-011, so the two FRs describe the type and the count differently | spec/functional/FR-011-live-occurrence-limit.md |
 | FND-007 | low | The rationale presents "the frame tests C + N" and the native stop at N as today's behaviour, but FSL's std evaluator has no live-occurrence test yet: NFR-130's TC-2164 and TC-2165 are `#[ignore = "QSL-2183: ... not implemented yet"]`. This is the target behaviour, not the current one | spec/functional/FR-013-aggregate-live-occurrences-across-nested-evaluation.md:27-40 |
+
+## New findings (disposition pass 1)
+
+| ID | Severity | Summary | Refs |
+| --- | --- | --- | --- |
+| FND-008 | medium | The implementor list in item 2 misses agent-ix/filament-contract-codegen, which consumes `filament_eval::Body`. Its generator emits two `impl Body for Invocation` templates (src/oracle/function/owner_render.rs:361 and 440, with a source assertion at 542), and its tests define `EchoBody` and `SitedCallBody` (owner_path.rs:856 and 890). Two of its callers run a body outside any session: the generated test helper `invoke_native_body` (tests/it/exact_function_agreement.rs:1727) and the Kani harness (tests/it/kani_function_harness.rs:285). Item 1's "No public constructor exists; only a session makes one" leaves those callers no way to supply the new `&mut LiveContext`. Name CG in the list and give out-of-session callers a way to build a context (for example a public `LiveContext::new(limit)`), or state CG's migration | spec/functional/FR-013-aggregate-live-occurrences-across-nested-evaluation.md:61-80 |
+| FND-009 | low | Item 6's "frames a transition opened end with that transition" is a description, not an obligation. Each advance gets a fresh context, so a closure that returns `Continue` or `Call` with in-transition frames still open undercounts them on its next transition. Make it a SHALL on the frame (close every opened frame before returning), or carry the open frames' count across transitions | spec/functional/FR-013-aggregate-live-occurrences-across-nested-evaluation.md:109-116 |
+
+## Dispositions
+
+| FND | outcome | reason |
+| --- | --- | --- |
+| FND-001 | fixed | Item 8 now ends the application on a live-occurrence `Incomplete` returned by a frame; FR-011 item 7, FR-011-AC-5 and FR-012 item 3 were amended to match; AC-1 asserts that P is never resumed with the child |
+| FND-002 | fixed | Item 7 and FR-012 items 1-2 count frames opened inside a transition as levels. Item 8 adds the session frames above the selected frame. Native AC-1 gives 0+1=1 and registry gives 1+0=1, matching FR-485-AC-19 |
+| FND-003 | fixed | `Body::resume` takes `&mut LiveContext` (item 2), and item 5 binds host bodies to `nested()` and `reach`; AC-4 covers a host body (`held` 3) |
+| FND-004 | fixed | `nested()` reads `live` at call time, including open in-transition frames; AC-4 native gives held 7 (3+4), root 3 completes at 10, root 4 stops with consumed 7 |
+| FND-005 | fixed | Item 6 raises the session peak after every advance or resume, whatever the frame returned, and `reach` folds nested peaks in. AC-5 gives 3+4+4=11 through a later `Call` and a denied charge, plus a host body nested peak of 9 |
+| FND-006 | fixed | FR-011 items 1, 4, 7 and 9 and AC-5 now carry `held`, in-transition frames and the in-transition stop |
+| FND-007 | fixed | The rationale now says this is the target behaviour and that FSL's std evaluator has no live-occurrence test yet |

@@ -53,7 +53,7 @@ re-running the call.
    evaluation the selected frame finishes with is the terminal evaluation,
    with no further adjustment, so its `frame_depth` counts the frames above the
    selected frame. A live-occurrence stop a frame returns is not
-   delivered: it ends the application with the `frame_depth` FR-013 item 8 states.
+   delivered: it ends the application with the `frame_depth` FR-013 item 9 states.
 4. An outcome the session itself produces at a call site, a denied
    `function.call` charge or a reached live-occurrence limit (FR-011), arises
    in the calling frame: its `frame_depth` is the number of call frames open

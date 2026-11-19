@@ -112,9 +112,10 @@ pub struct Session<'a, C: CheckedClosure> {
     /// The task stack: the callee is on top, its suspended callers below.
     frames: Vec<Frame<C>>,
     limits: SessionLimits,
-    /// The live-occurrence count of `frames`.
+    /// The live-occurrence count of `held`, `frames` and their in-transition
+    /// frames.
     live: u64,
-    /// The largest `live` reached.
+    /// The largest live count reached by this session or nested transitions.
     peak: u64,
 }
 

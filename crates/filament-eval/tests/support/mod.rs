@@ -213,6 +213,7 @@ pub type Binds = Arc<Mutex<Vec<(NodeKey, Vec<u64>)>>>;
 #[derive(Default)]
 pub struct Toy {
     binds: Binds,
+    live_contexts: Arc<Mutex<Vec<(u64, u64, u64)>>>,
     missing_root_site: bool,
 }
 
@@ -220,6 +221,10 @@ impl Toy {
     /// The log of interpreted callables bound, in the order they were entered.
     pub fn binds(&self) -> Binds {
         Arc::clone(&self.binds)
+    }
+
+    pub fn live_contexts(&self) -> Arc<Mutex<Vec<(u64, u64, u64)>>> {
+        Arc::clone(&self.live_contexts)
     }
 
     /// An admitted closure with a broken root-location invariant.
@@ -252,10 +257,12 @@ impl Toy {
     }
 
     fn arity(callable: &NodeKey) -> usize {
-        match *callable {
-            key if key == add() || key == live_child_two() => 2,
-            key if key == live_child_three() => 3,
-            _ => 1,
+        if *callable == add() || *callable == live_child_two() {
+            2
+        } else if *callable == live_child_three() {
+            3
+        } else {
+            1
         }
     }
 }
@@ -419,6 +426,13 @@ impl CheckedClosure for Toy {
         meter: &mut Meter,
     ) -> Result<Transition, InternalFault> {
         let (state, arguments) = task;
+        if matches!(state, Task::LiveOpen) {
+            self.live_contexts.lock().expect("live-context log").push((
+                context.live(),
+                context.limit(),
+                context.peak(),
+            ));
+        }
         let argument = arguments
             .first()
             .and_then(|value| match value {

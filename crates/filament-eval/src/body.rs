@@ -122,7 +122,8 @@ pub enum Transition {
 /// it must not be converted to a completed value or an internal fault. Only a
 /// broken body invariant is [`BodyFailure::Fault`].
 pub trait Body: Send {
-    /// Run one finite transition.
+    /// Run one finite transition under the application's live-occurrence
+    /// count and limit.
     ///
     /// # Errors
     ///

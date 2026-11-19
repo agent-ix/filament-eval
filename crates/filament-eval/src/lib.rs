@@ -14,7 +14,8 @@
 //! heap task stack, so no evaluation step recurses on the native stack in
 //! proportion to call depth, and there is no depth ceiling: the bounds are the
 //! `work_units` fuel of the one [`filament_exact::Meter`] (QSpec FR-146) and
-//! the session's live-occurrence limit ([`SessionLimits`], FR-011). A
+//! the application's live-occurrence limit ([`SessionLimits`], FR-011 and
+//! [`LiveContext`], FR-013). A
 //! body that applies a callee never calls an evaluator. It returns a
 //! [`ChildRequest`] and is suspended; the scheduler validates the request,
 //! charges `function.call`, runs the callee and delivers its [`Evaluation`]

@@ -71,6 +71,7 @@ fn every_operation_projects_all_children_and_retains_metadata() {
         (
             NodeKind::Let {
                 slot: 7,
+                name: "k".to_owned(),
                 value: 1,
                 body: 2,
             },
@@ -305,6 +306,7 @@ fn every_operation_projects_all_children_and_retains_metadata() {
             NodeKind::Query {
                 visit: Visit::Map,
                 slot: 7,
+                name: "x".to_owned(),
                 source: 1,
                 body: 2,
             },
@@ -315,6 +317,8 @@ fn every_operation_projects_all_children_and_retains_metadata() {
             NodeKind::Fold {
                 accumulator: 7,
                 binder: 8,
+                accumulator_name: "acc".to_owned(),
+                binder_name: "x".to_owned(),
                 source: 1,
                 step: 3,
                 identity: Some(2),
@@ -372,11 +376,13 @@ fn every_operation_projects_all_children_and_retains_metadata() {
                     CaseArm {
                         member: 0,
                         binders: vec![7],
+                        names: vec!["r".to_owned()],
                         body: 2,
                     },
                     CaseArm {
                         member: 1,
                         binders: vec![],
+                        names: vec![],
                         body: 3,
                     },
                 ],
@@ -415,6 +421,7 @@ fn every_operation_projects_all_children_and_retains_metadata() {
         (
             NodeKind::Seq {
                 slot: 7,
+                name: "i".to_owned(),
                 low: 1,
                 high: 2,
                 body: 3,

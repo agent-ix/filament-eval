@@ -65,7 +65,7 @@ fn pending_reference_literal_refuses_non_utf8_identity() {
     );
 }
 
-/// Trace: FR-400-AC-11
+/// Trace: FR-400-AC-11, FR-400-AC-13 (binder names survive projection)
 #[test]
 fn nested_children_and_operand_order_survive_projection() {
     let record = NodeKind::<u8, ()>::Record {
@@ -99,6 +99,8 @@ fn nested_children_and_operand_order_survive_projection() {
     let fold = NodeKind::<u8, ()>::Fold {
         accumulator: 7,
         binder: 8,
+        accumulator_name: "acc".to_owned(),
+        binder_name: "x".to_owned(),
         source: 1,
         step: 3,
         identity: Some(2),
@@ -114,6 +116,8 @@ fn nested_children_and_operand_order_survive_projection() {
     let NodeKind::Fold {
         accumulator,
         binder,
+        accumulator_name,
+        binder_name,
         source,
         step,
         identity,
@@ -124,6 +128,10 @@ fn nested_children_and_operand_order_survive_projection() {
     assert_eq!(
         (accumulator, binder, source, step, identity),
         (7, 8, 11, 13, Some(12))
+    );
+    assert_eq!(
+        (accumulator_name.as_str(), binder_name.as_str()),
+        ("acc", "x")
     );
     assert_eq!(seen, [1, 2, 3]);
 
@@ -138,6 +146,7 @@ fn nested_children_and_operand_order_survive_projection() {
         arms: vec![CaseArm {
             member: 3,
             binders: vec![7, 8],
+            names: vec!["w".to_owned(), "h".to_owned()],
             body: 4,
         }],
     };
@@ -152,6 +161,7 @@ fn nested_children_and_operand_order_survive_projection() {
     assert_eq!(arms.len(), 1);
     assert_eq!(arms[0].member, 3);
     assert_eq!(arms[0].binders, [7, 8]);
+    assert_eq!(arms[0].names, ["w", "h"]);
     assert_eq!(arms[0].body, 14);
 }
 

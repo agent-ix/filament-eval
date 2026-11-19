@@ -14,14 +14,14 @@ name = "filament_eval"
 path = "src/lib.rs"
 
 [dependencies]
-filament-semantic-value = { git = "https://github.com/agent-ix/filament-semantic-value", tag = "v0.1.5", default-features = false }
-filament-exact = { git = "https://github.com/agent-ix/filament-exact", tag = "v0.3.0", default-features = false }
+filament-semantic-value = { git = "https://github.com/agent-ix/filament-semantic-value", rev = "3fd65564216ad917db391caf03ead4cd90316d39", default-features = false }
+filament-exact = { git = "https://github.com/agent-ix/filament-exact", rev = "b25ff96fee8ab80418e7f7aaf8e9441c60745ab1", default-features = false }
 thiserror = { version = "2.0.20", default-features = false }
 
 [dev-dependencies]
 ix-trace-rs = { git = "https://github.com/agent-ix/ix-trace-rs", tag = "v0.1.2" }
 # The ordered charge log, to assert the exact charge sequence of a run.
-filament-exact = { git = "https://github.com/agent-ix/filament-exact", tag = "v0.3.0", default-features = false, features = ["test-support"] }
+filament-exact = { git = "https://github.com/agent-ix/filament-exact", rev = "b25ff96fee8ab80418e7f7aaf8e9441c60745ab1", default-features = false, features = ["test-support"] }
 
 [lints]
 workspace = true

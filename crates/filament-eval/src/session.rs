@@ -16,6 +16,7 @@ use filament_semantic_value::location::ExpressionLocation;
 
 use crate::body::{Body, ChildRequest, Resume, Transition};
 use crate::closure::{CheckedClosure, RequestRefusal};
+use crate::live_context::LiveContext;
 use crate::registry::Bindings;
 use crate::result::{CallFailure, Evaluation, FamilyOutcome};
 
@@ -32,12 +33,16 @@ pub struct SessionLimits {
     /// bound in it at entry. Every value is a valid limit; 0 stops the first
     /// call.
     pub live_occurrences: u64,
+    /// The count already held by an enclosing application when this session
+    /// begins (FR-013). Use zero for an independent application.
+    pub held: u64,
 }
 
 impl Default for SessionLimits {
     fn default() -> Self {
         Self {
             live_occurrences: DEFAULT_LIVE_OCCURRENCES,
+            held: 0,
         }
     }
 }
@@ -70,6 +75,10 @@ struct Frame<C: CheckedClosure> {
     input: Resume,
     /// This frame's live occurrences, counted while it is on the stack.
     occurrences: u64,
+    /// Occurrences opened by this frame inside its transitions and still live.
+    carried_occurrences: u64,
+    /// Frames opened by this frame inside its transitions and still live.
+    carried_frames: u64,
 }
 
 /// The result of one [`Session::step`].
@@ -103,9 +112,10 @@ pub struct Session<'a, C: CheckedClosure> {
     /// The task stack: the callee is on top, its suspended callers below.
     frames: Vec<Frame<C>>,
     limits: SessionLimits,
-    /// The live-occurrence count of `frames`.
+    /// The live-occurrence count of `held`, `frames` and their in-transition
+    /// frames.
     live: u64,
-    /// The largest `live` reached.
+    /// The largest live count reached by this session or nested transitions.
     peak: u64,
 }
 
@@ -126,9 +136,22 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
             entry: Some(entry),
             frames: Vec::new(),
             limits,
-            live: 0,
-            peak: 0,
+            live: limits.held,
+            peak: limits.held,
         }
+    }
+
+    /// The current live-occurrence count, including `held` and frames opened
+    /// inside transitions.
+    #[must_use]
+    pub const fn live_occurrences(&self) -> u64 {
+        self.live
+    }
+
+    /// The limits bound to this session at `Begin`.
+    #[must_use]
+    pub const fn limits(&self) -> SessionLimits {
+        self.limits
     }
 
     /// Advance the application by one finite saved transition.
@@ -168,9 +191,17 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
         if let Some(entry) = self.entry.take() {
             return self.enter(entry);
         }
+        let live = self.live;
+        let limit = self.limits.live_occurrences;
         let Some(frame) = self.frames.last_mut() else {
             return Err(fault("session-without-frame").into());
         };
+        let mut context = LiveContext::for_transition(
+            live,
+            limit,
+            frame.carried_frames,
+            frame.carried_occurrences,
+        );
         let input = mem::replace(&mut frame.input, Resume::Again);
         let transition = match &mut frame.engine {
             Engine::Interpreted(task) => {
@@ -182,10 +213,14 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                     }
                 };
                 self.closure
-                    .advance(task, delivered, self.environment, self.meter)?
+                    .advance(task, delivered, &mut context, self.environment, self.meter)?
             }
-            Engine::Host(body) => body.resume(input, self.meter)?,
+            Engine::Host(body) => body.resume(input, &mut context, self.meter)?,
         };
+        self.live = context.live();
+        self.peak = self.peak.max(context.peak());
+        frame.carried_frames = context.open_frames();
+        frame.carried_occurrences = context.open_occurrences();
         match transition {
             Transition::Continue => {}
             Transition::Call(request) => {
@@ -194,6 +229,11 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                 self.entry = Some(Entry::Request(request));
             }
             Transition::Done(mut evaluation) => {
+                if is_live_occurrence_incomplete(&evaluation) {
+                    evaluation.frame_depth = evaluation.frame_depth.saturating_add(1);
+                    evaluation.peak_live_occurrences = self.peak;
+                    return Ok(Some(evaluation));
+                }
                 let completed = is_completed(&evaluation);
                 if completed {
                     evaluation.frame_depth = 0;
@@ -260,6 +300,8 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                     engine: Engine::Interpreted(task),
                     input: Resume::Again,
                     occurrences,
+                    carried_occurrences: 0,
+                    carried_frames: 0,
                 });
                 Ok(None)
             }
@@ -296,6 +338,8 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                 engine: Engine::Host(factory.begin()),
                 input: Resume::Start(arguments),
                 occurrences,
+                carried_occurrences: 0,
+                carried_frames: 0,
             },
             None => Frame {
                 engine: Engine::Interpreted(self.closure.bind_call(
@@ -305,6 +349,8 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                 )?),
                 input: Resume::Again,
                 occurrences,
+                carried_occurrences: 0,
+                carried_frames: 0,
             },
         };
         self.push(frame);
@@ -331,13 +377,21 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
     /// live count is the sum of the pushed frames, so it never saturates.
     fn pop(&mut self) {
         if let Some(frame) = self.frames.pop() {
-            self.live = self.live.saturating_sub(frame.occurrences);
+            self.live = self
+                .live
+                .saturating_sub(frame.occurrences)
+                .saturating_sub(frame.carried_occurrences);
         }
     }
 
     /// The number of caller frames above the call being entered.
     fn caller_depth(&self) -> u32 {
-        u32::try_from(self.frames.len().saturating_sub(1)).unwrap_or(u32::MAX)
+        let depth = u64::try_from(self.frames.len().saturating_sub(1))
+            .unwrap_or(u64::MAX)
+            .saturating_add(self.frames.iter().fold(0_u64, |total, frame| {
+                total.saturating_add(frame.carried_frames)
+            }));
+        u32::try_from(depth).unwrap_or(u32::MAX)
     }
 
     /// The located incomplete result of a denied charge. A charge the meter's
@@ -370,6 +424,14 @@ fn is_completed(evaluation: &Evaluation) -> bool {
     matches!(
         &evaluation.outcome,
         FamilyOutcome::Evaluated(Outcome::Completed(_))
+    )
+}
+
+fn is_live_occurrence_incomplete(evaluation: &Evaluation) -> bool {
+    matches!(
+        &evaluation.outcome,
+        FamilyOutcome::Evaluated(Outcome::Incomplete(incomplete))
+            if incomplete.limit_kind == LimitKind::LiveOccurrences
     )
 }
 

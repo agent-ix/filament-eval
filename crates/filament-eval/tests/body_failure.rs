@@ -4,8 +4,8 @@
 mod support;
 
 use filament_eval::{
-    Admission, Body, BodyFactory, BodyFailure, CallFailure, Evaluation, FamilyOutcome, Progress,
-    Registry, Resume, SessionLimits, Transition,
+    Admission, Body, BodyFactory, BodyFailure, CallFailure, Evaluation, FamilyOutcome, LiveContext,
+    Progress, Registry, Resume, SessionLimits, Transition,
 };
 use filament_exact::{Cancel, CancelCause, Charge, ChargePoint, Meter, Outcome, Value};
 use filament_semantic_value::catalog::{Category, InternalFault};
@@ -27,7 +27,12 @@ impl BodyFactory for ReturnFailure {
 }
 
 impl Body for FailureBody {
-    fn resume(&mut self, _input: Resume, meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        _input: Resume,
+        _context: &mut LiveContext,
+        meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         meter
             .charge(Charge::new(ChargePoint::IntegerArithmeticArithmetic))
             .expect("the test meter admits the body's preceding work");
@@ -47,7 +52,12 @@ impl BodyFactory for ReturnFalse {
 }
 
 impl Body for FalseBody {
-    fn resume(&mut self, _input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        _input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         Ok(Transition::Done(Evaluation::completed(Value::Boolean(
             false,
         ))))

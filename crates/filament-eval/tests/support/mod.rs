@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 
 use filament_eval::{
     Body, BodyFactory, BodyFailure, CallFailure, CheckedClosure, ChildRequest, Evaluation,
-    FamilyOutcome, RequestRefusal, Resume, Signature, Transition,
+    FamilyOutcome, LiveContext, RequestRefusal, Resume, Signature, Transition,
 };
 use filament_exact::{
     Charge, ChargePoint, IeeeFlag, IeeeWidth, Integer, LimitKind, Meter, NodeKey, Outcome,
@@ -92,6 +92,45 @@ pub fn completed_depth() -> NodeKey {
 /// `REPEAT(n)`: applies `COUNT` to 0 n times in sequence and completes with n.
 pub fn repeat() -> NodeKey {
     key(13)
+}
+pub fn live_child_two() -> NodeKey {
+    key(14)
+}
+pub fn live_child_three() -> NodeKey {
+    key(15)
+}
+pub fn nested_fit_child() -> NodeKey {
+    key(16)
+}
+pub fn nested_over_child() -> NodeKey {
+    key(17)
+}
+pub fn live_done_two() -> NodeKey {
+    key(18)
+}
+pub fn live_done_three() -> NodeKey {
+    key(19)
+}
+pub fn live_done_four() -> NodeKey {
+    key(20)
+}
+pub fn native_nested_fit() -> NodeKey {
+    key(21)
+}
+pub fn native_nested_over() -> NodeKey {
+    key(22)
+}
+pub fn native_chain() -> NodeKey {
+    key(23)
+}
+pub fn native_peak_then_call() -> NodeKey {
+    key(24)
+}
+pub fn live_observe() -> NodeKey {
+    key(25)
+}
+pub fn native_carry_call() -> NodeKey {
+    key(26)
 }
 
 pub fn signature_of_arity(arity: usize) -> Signature {
@@ -197,6 +236,26 @@ pub enum Task {
     CompletedDepth,
     /// `REPEAT`: how many applications of `COUNT(0)` have returned.
     Repeat(u64),
+    /// Opens and closes an in-transition frame of four occurrences.
+    LiveOpen,
+    /// Begins a nested application with the current context's limits.
+    NestedCall {
+        callable: NodeKey,
+        arguments: Vec<Value>,
+        open_occurrences: Option<u64>,
+    },
+    /// Calls a child which opens and closes an in-transition frame.
+    NativeChain,
+    /// Opens and closes two in-transition frames, then requests a child.
+    NativePeakThenCall,
+    /// Carries C and N across a child request, then closes both when resumed.
+    NativeCarryCall {
+        carried: Vec<u64>,
+    },
+    /// Records the transition context and completes.
+    LiveObserve,
+    /// Completes without opening another frame.
+    LiveDone,
 }
 
 /// The callables entered, in order, with their integer arguments.
@@ -205,6 +264,7 @@ pub type Binds = Arc<Mutex<Vec<(NodeKey, Vec<u64>)>>>;
 #[derive(Default)]
 pub struct Toy {
     binds: Binds,
+    live_contexts: Arc<Mutex<Vec<(u64, u64, u64)>>>,
     missing_root_site: bool,
 }
 
@@ -212,6 +272,10 @@ impl Toy {
     /// The log of interpreted callables bound, in the order they were entered.
     pub fn binds(&self) -> Binds {
         Arc::clone(&self.binds)
+    }
+
+    pub fn live_contexts(&self) -> Arc<Mutex<Vec<(u64, u64, u64)>>> {
+        Arc::clone(&self.live_contexts)
     }
 
     /// An admitted closure with a broken root-location invariant.
@@ -237,13 +301,40 @@ impl Toy {
             recursive_undefined(),
             completed_depth(),
             repeat(),
+            live_child_two(),
+            live_child_three(),
+            nested_fit_child(),
+            nested_over_child(),
+            live_done_two(),
+            live_done_three(),
+            live_done_four(),
+            native_nested_fit(),
+            native_nested_over(),
+            native_chain(),
+            native_peak_then_call(),
+            live_observe(),
+            native_carry_call(),
         ]
         .contains(callable)
     }
 
     fn arity(callable: &NodeKey) -> usize {
-        if *callable == add() {
+        if *callable == add()
+            || *callable == live_child_two()
+            || *callable == nested_fit_child()
+            || *callable == nested_over_child()
+            || *callable == native_nested_fit()
+            || *callable == native_nested_over()
+            || *callable == native_chain()
+            || *callable == native_peak_then_call()
+            || *callable == native_carry_call()
+            || *callable == live_done_two()
+        {
             2
+        } else if *callable == live_child_three() || *callable == live_done_three() {
+            3
+        } else if *callable == live_done_four() {
+            4
         } else {
             1
         }
@@ -368,6 +459,47 @@ impl CheckedClosure for Toy {
             Task::CompletedDepth
         } else if *callable == repeat() {
             Task::Repeat(0)
+        } else if *callable == live_child_two() || *callable == live_child_three() {
+            Task::LiveOpen
+        } else if *callable == nested_fit_child() {
+            Task::NestedCall {
+                callable: live_done_three(),
+                arguments: vec![int(0), int(0), int(0)],
+                open_occurrences: None,
+            }
+        } else if *callable == nested_over_child() {
+            Task::NestedCall {
+                callable: live_done_four(),
+                arguments: vec![int(0), int(0), int(0), int(0)],
+                open_occurrences: None,
+            }
+        } else if *callable == native_nested_fit() {
+            Task::NestedCall {
+                callable: live_done_two(),
+                arguments: vec![int(0), int(0)],
+                open_occurrences: Some(4),
+            }
+        } else if *callable == native_nested_over() {
+            Task::NestedCall {
+                callable: live_done_three(),
+                arguments: vec![int(0), int(0), int(0)],
+                open_occurrences: Some(4),
+            }
+        } else if *callable == native_chain() {
+            Task::NativeChain
+        } else if *callable == native_peak_then_call() {
+            Task::NativePeakThenCall
+        } else if *callable == live_observe() {
+            Task::LiveObserve
+        } else if *callable == native_carry_call() {
+            Task::NativeCarryCall {
+                carried: Vec::new(),
+            }
+        } else if *callable == live_done_two()
+            || *callable == live_done_three()
+            || *callable == live_done_four()
+        {
+            Task::LiveDone
         } else {
             Task::Bodiless
         };
@@ -402,10 +534,21 @@ impl CheckedClosure for Toy {
         &self,
         task: &mut Self::Task,
         delivered: Option<Evaluation>,
+        context: &mut LiveContext,
         _environment: &(),
-        _meter: &mut Meter,
+        meter: &mut Meter,
     ) -> Result<Transition, InternalFault> {
         let (state, arguments) = task;
+        if matches!(
+            state,
+            Task::LiveOpen | Task::LiveObserve | Task::NativeCarryCall { .. }
+        ) {
+            self.live_contexts.lock().expect("live-context log").push((
+                context.live(),
+                context.limit(),
+                context.peak(),
+            ));
+        }
         let argument = arguments
             .first()
             .and_then(|value| match value {
@@ -460,6 +603,137 @@ impl CheckedClosure for Toy {
                     site: site(),
                 }))
             }
+            Task::LiveOpen => {
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits the in-transition call");
+                match context.open(&Integer::from(4_u64)) {
+                    Ok(occurrences) => {
+                        context.close(occurrences);
+                        Ok(Transition::Done(Evaluation::completed(int(context.live()))))
+                    }
+                    Err(incomplete) => Ok(Transition::Done(Evaluation {
+                        outcome: FamilyOutcome::Evaluated(Outcome::Incomplete(incomplete)),
+                        location: Some(site()),
+                        losses: Vec::new(),
+                        frame_depth: 0,
+                        peak_live_occurrences: 0,
+                    })),
+                }
+            }
+            Task::NestedCall {
+                callable,
+                arguments: nested_arguments,
+                open_occurrences,
+            } => {
+                let opened = match open_occurrences {
+                    Some(occurrences) => {
+                        meter
+                            .charge(Charge::new(ChargePoint::FunctionCall))
+                            .expect("the test meter admits the in-transition call");
+                        match context.open(&Integer::from(*occurrences)) {
+                            Ok(opened) => Some(opened),
+                            Err(incomplete) => {
+                                return Ok(Transition::Done(Evaluation {
+                                    outcome: FamilyOutcome::Evaluated(Outcome::Incomplete(
+                                        incomplete,
+                                    )),
+                                    location: Some(site()),
+                                    losses: Vec::new(),
+                                    frame_depth: 0,
+                                    peak_live_occurrences: 0,
+                                }));
+                            }
+                        }
+                    }
+                    None => None,
+                };
+                let limits = context.nested();
+                let mut registry = filament_eval::Registry::new(Toy::default());
+                let nested = registry
+                    .begin_call(
+                        callable.clone(),
+                        nested_arguments.clone(),
+                        limits,
+                        &(),
+                        meter,
+                    )
+                    .map_err(|_| fault("nested-call-not-admitted"))?
+                    .run()
+                    .map_err(|_| fault("nested-call-failed"))?;
+                context.reach(nested.peak_live_occurrences);
+                if let Some(opened) = opened {
+                    context.close(opened);
+                }
+                Ok(Transition::Done(nested))
+            }
+            Task::NativeChain => {
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits C");
+                let c = context.open(&Integer::from(3_u64)).expect("C fits");
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits N");
+                let n = match context.open(&Integer::from(4_u64)) {
+                    Ok(n) => n,
+                    Err(incomplete) => {
+                        context.close(c);
+                        return Ok(Transition::Done(Evaluation {
+                            outcome: FamilyOutcome::Evaluated(Outcome::Incomplete(incomplete)),
+                            location: Some(site()),
+                            losses: Vec::new(),
+                            frame_depth: 0,
+                            peak_live_occurrences: 0,
+                        }));
+                    }
+                };
+                context.close(n);
+                context.close(c);
+                Ok(Transition::Done(Evaluation::completed(int(6))))
+            }
+            Task::NativePeakThenCall => {
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits C");
+                let c = context.open(&Integer::from(4_u64)).expect("C fits");
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits N");
+                let n = context.open(&Integer::from(4_u64)).expect("N fits");
+                context.close(n);
+                context.close(c);
+                *state = Task::Applied;
+                Ok(Transition::Call(ChildRequest {
+                    callee: live_done_two(),
+                    arguments: vec![int(0), int(0)],
+                    site: site(),
+                }))
+            }
+            Task::NativeCarryCall { carried } => {
+                if let Some(child) = delivered {
+                    for occurrences in carried.drain(..) {
+                        context.close(occurrences);
+                    }
+                    Ok(Transition::Done(child))
+                } else {
+                    meter
+                        .charge(Charge::new(ChargePoint::FunctionCall))
+                        .expect("the test meter admits C");
+                    carried.push(context.open(&Integer::from(4_u64)).expect("C fits"));
+                    meter
+                        .charge(Charge::new(ChargePoint::FunctionCall))
+                        .expect("the test meter admits N");
+                    carried.push(context.open(&Integer::from(4_u64)).expect("N fits"));
+                    Ok(Transition::Call(ChildRequest {
+                        callee: live_observe(),
+                        arguments: vec![int(0)],
+                        site: site(),
+                    }))
+                }
+            }
+            Task::LiveDone => Ok(Transition::Done(Evaluation::completed(int(0)))),
+            Task::LiveObserve => Ok(Transition::Done(Evaluation::completed(int(0)))),
             Task::CompletedDepth => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
                 location: None,
@@ -606,7 +880,12 @@ struct RelayBody {
 }
 
 impl Body for RelayBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         self.counts.resumed.fetch_add(1, Ordering::SeqCst);
         match input {
             Resume::Start(arguments) => {
@@ -675,7 +954,12 @@ impl ChargingBody {
 }
 
 impl Body for ChargingBody {
-    fn resume(&mut self, input: Resume, meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         self.counts.resumed.fetch_add(1, Ordering::SeqCst);
         if let Some(done) = Self::work(meter) {
             return Ok(done);
@@ -726,7 +1010,12 @@ struct BadRequestBody {
 }
 
 impl Body for BadRequestBody {
-    fn resume(&mut self, _input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        _input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         Ok(Transition::Call(ChildRequest {
             callee: self.callee.clone(),
             arguments: self.arguments.clone(),
@@ -756,7 +1045,12 @@ struct YieldingBody {
 }
 
 impl Body for YieldingBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         match input {
             Resume::Start(arguments) => {
                 self.arguments = arguments;
@@ -784,7 +1078,12 @@ impl BodyFactory for Echo {
 struct EchoBody;
 
 impl Body for EchoBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         match input {
             Resume::Start(arguments) => Ok(Transition::Done(Evaluation::completed(
                 arguments.into_iter().next().unwrap_or_else(|| int(0)),
@@ -818,7 +1117,12 @@ struct SequenceBody {
 }
 
 impl Body for SequenceBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         if let Resume::Child(child) = input {
             if completed_int(&child).is_none() {
                 return Ok(Transition::Done(*child));

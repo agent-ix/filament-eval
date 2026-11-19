@@ -22,7 +22,10 @@ use support::{
 const DEEP: u64 = 600_000;
 
 fn limit(live_occurrences: u64) -> SessionLimits {
-    SessionLimits { live_occurrences }
+    SessionLimits {
+        live_occurrences,
+        held: 0,
+    }
 }
 
 /// The live-occurrence incomplete record an evaluation holds, if any.

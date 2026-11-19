@@ -10,6 +10,7 @@ use filament_semantic_value::location::ExpressionLocation;
 use crate::body::Transition;
 use crate::result::{CallFailure, Evaluation};
 use crate::signature::Signature;
+use crate::LiveContext;
 use filament_semantic_value::declaration::EnvironmentFailure;
 
 /// Why a body's nested request failed validation (FR-262).
@@ -144,7 +145,8 @@ pub trait CheckedClosure {
         environment: &Self::Environment,
     ) -> Result<Self::Task, InternalFault>;
 
-    /// Advance an interpreted frame by one finite transition.
+    /// Advance an interpreted frame by one finite transition under the
+    /// application's live-occurrence count and limit.
     ///
     /// `delivered` is the matching child's evaluation when the frame is
     /// resumed after a [`Transition::Call`], and `None` otherwise. The frame
@@ -161,6 +163,7 @@ pub trait CheckedClosure {
         &self,
         task: &mut Self::Task,
         delivered: Option<Evaluation>,
+        context: &mut LiveContext,
         environment: &Self::Environment,
         meter: &mut Meter,
     ) -> Result<Transition, InternalFault>;

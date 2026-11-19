@@ -54,7 +54,10 @@ quantity-scaling descriptors in
 live-occurrence limit is specified in
 [FR-011](functional/FR-011-live-occurrence-limit.md), and the call depth an
 evaluation reports in [FR-012](functional/FR-012-evaluation-frame-depth.md).
-Test cases TC-001 to TC-004 under `test-cases/` verify FR-009 to FR-012.
+The live-occurrence count across a frame's transition and a nested session
+is specified in
+[FR-013](functional/FR-013-aggregate-live-occurrences-across-nested-evaluation.md).
+Test cases TC-001 to TC-005 under `test-cases/` verify FR-009 to FR-013.
 Other crate behavior remains outside this requirement inventory.
 
 The IEEE arithmetic, comparison, rounding, and diagnostic semantics remain

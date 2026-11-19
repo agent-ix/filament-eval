@@ -126,6 +126,9 @@ pub fn native_chain() -> NodeKey {
 pub fn native_peak_then_call() -> NodeKey {
     key(24)
 }
+pub fn live_observe() -> NodeKey {
+    key(25)
+}
 
 pub fn signature_of_arity(arity: usize) -> Signature {
     Signature::new(vec![ValueType::Integer; arity], ValueType::Integer)
@@ -242,6 +245,8 @@ pub enum Task {
     NativeChain,
     /// Opens and closes two in-transition frames, then requests a child.
     NativePeakThenCall,
+    /// Records the transition context and completes.
+    LiveObserve,
     /// Completes without opening another frame.
     LiveDone,
 }
@@ -300,6 +305,7 @@ impl Toy {
             native_nested_over(),
             native_chain(),
             native_peak_then_call(),
+            live_observe(),
         ]
         .contains(callable)
     }
@@ -474,6 +480,8 @@ impl CheckedClosure for Toy {
             Task::NativeChain
         } else if *callable == native_peak_then_call() {
             Task::NativePeakThenCall
+        } else if *callable == live_observe() {
+            Task::LiveObserve
         } else if *callable == live_done_two()
             || *callable == live_done_three()
             || *callable == live_done_four()
@@ -518,7 +526,7 @@ impl CheckedClosure for Toy {
         meter: &mut Meter,
     ) -> Result<Transition, InternalFault> {
         let (state, arguments) = task;
-        if matches!(state, Task::LiveOpen) {
+        if matches!(state, Task::LiveOpen | Task::LiveObserve) {
             self.live_contexts.lock().expect("live-context log").push((
                 context.live(),
                 context.limit(),
@@ -670,6 +678,7 @@ impl CheckedClosure for Toy {
                 }))
             }
             Task::LiveDone => Ok(Transition::Done(Evaluation::completed(int(0)))),
+            Task::LiveObserve => Ok(Transition::Done(Evaluation::completed(int(0)))),
             Task::CompletedDepth => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
                 location: None,

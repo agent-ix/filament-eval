@@ -13,7 +13,7 @@ use filament_exact::{Charge, ChargePoint, Incomplete, Integer, LimitKind, Meter,
 use ix_trace_rs::trace;
 use support::{
     Toy, add, completed_int, count, int, live_child_three, live_child_two, live_done_three,
-    live_done_two, meter, native_chain, native_nested_fit, native_nested_over,
+    live_done_two, live_observe, meter, native_chain, native_nested_fit, native_nested_over,
     native_peak_then_call, nested_fit_child, nested_over_child, signature_of_arity, site, spent,
 };
 
@@ -169,6 +169,9 @@ impl Body for TestBody {
             }
             (HostAction::CallWithCarries { .. }, Resume::Child(child)) => {
                 self.resumes.lock().expect("resume log").push("child");
+                for carried in self.carried_many.drain(..) {
+                    context.close(carried);
+                }
                 Ok(Transition::Done(*child))
             }
             (HostAction::Carry, Resume::Start(_)) => {
@@ -813,6 +816,65 @@ fn carried_frames_contribute_to_the_next_scheduler_refusal_depth() {
         })
     );
     assert_eq!(*resumes.lock().expect("resume log"), vec!["start"]);
+}
+
+#[trace("TC-005", "FR-013-AC-7")]
+#[test]
+fn carried_frames_allow_a_child_and_are_closed_when_the_caller_resumes() {
+    let toy = Toy::default();
+    let child_contexts = toy.live_contexts();
+    let (factory, caller_contexts, resumes) = host_factory(HostAction::CallWithCarries {
+        callable: live_observe(),
+        arguments: vec![int(0)],
+    });
+    let mut registry = Registry::new(toy);
+    assert_eq!(
+        registry.register(add(), &signature_of_arity(2), factory),
+        Admission::Accepted
+    );
+    let mut fuel = meter(u64::MAX);
+    let session = registry
+        .begin_call(add(), vec![int(0), int(0)], limit(20, 0), &(), &mut fuel)
+        .expect("registered root is admitted");
+    let session = match session.step() {
+        filament_eval::Progress::Runnable(session) => session,
+        filament_eval::Progress::Terminal(result) => panic!("root ended early: {result:?}"),
+    };
+    assert_eq!(session.live_occurrences(), 3);
+
+    let session = match session.step() {
+        filament_eval::Progress::Runnable(session) => session,
+        filament_eval::Progress::Terminal(result) => panic!("caller ended early: {result:?}"),
+    };
+    assert_eq!(session.live_occurrences(), 11);
+
+    let session = match session.step() {
+        filament_eval::Progress::Runnable(session) => session,
+        filament_eval::Progress::Terminal(result) => panic!("child ended early: {result:?}"),
+    };
+    assert_eq!(session.live_occurrences(), 13);
+
+    let session = match session.step() {
+        filament_eval::Progress::Runnable(session) => session,
+        filament_eval::Progress::Terminal(result) => panic!("caller ended early: {result:?}"),
+    };
+    assert_eq!(session.live_occurrences(), 11);
+
+    let completed = match session.step() {
+        filament_eval::Progress::Terminal(Ok(evaluation)) => evaluation,
+        filament_eval::Progress::Terminal(Err(failure)) => panic!("call failed: {failure:?}"),
+        filament_eval::Progress::Runnable(_) => panic!("caller did not finish"),
+    };
+    assert_eq!(completed_int(&completed), Some(0));
+    assert_eq!(completed.peak_live_occurrences, 13);
+    assert_eq!(
+        *child_contexts.lock().expect("child context log"),
+        vec![(13, 20, 13)]
+    );
+    let caller_contexts = caller_contexts.lock().expect("caller context log");
+    assert_eq!(caller_contexts.last().map(|read| read.live), Some(11));
+    assert_eq!(*resumes.lock().expect("resume log"), vec!["start", "child"]);
+    assert_eq!(spent(&fuel), 4);
 }
 
 #[trace("TC-005", "FR-013-AC-4")]

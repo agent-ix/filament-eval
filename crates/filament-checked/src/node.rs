@@ -245,6 +245,8 @@ pub struct CaseArm<Child = NodeId> {
     pub member: usize,
     /// Payload binders in position order.
     pub binders: Vec<Slot>,
+    /// The declared name of each payload binder, in the same position order.
+    pub names: Vec<String>,
     /// The arm body.
     pub body: Child,
 }
@@ -295,6 +297,8 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
     Let {
         /// The local slot.
         slot: Slot,
+        /// The declared name of the slot.
+        name: String,
         /// The bound value operand.
         value: Child,
         /// The body operand.
@@ -550,6 +554,8 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
         visit: Visit,
         /// The local slot.
         slot: Slot,
+        /// The declared name of the slot.
+        name: String,
         /// The source operand.
         source: Child,
         /// The body operand.
@@ -563,6 +569,10 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
         accumulator: Slot,
         /// The occurrence binder slot.
         binder: Slot,
+        /// The declared name of the accumulator slot.
+        accumulator_name: String,
+        /// The declared name of the occurrence binder slot.
+        binder_name: String,
         /// The source operand.
         source: Child,
         /// The fold step operand.
@@ -677,6 +687,8 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
     Seq {
         /// The local slot.
         slot: Slot,
+        /// The declared name of the index slot.
+        name: String,
         /// The first bound operand.
         low: Child,
         /// The last bound operand.
@@ -770,8 +782,14 @@ impl<Child, Literal> NodeKind<Child, Literal> {
             },
             K::Coerce(value, domain) => K::Coerce(child(value), domain.clone()),
             K::Local(slot) => K::Local(*slot),
-            K::Let { slot, value, body } => K::Let {
+            K::Let {
+                slot,
+                name,
+                value,
+                body,
+            } => K::Let {
                 slot: *slot,
+                name: name.clone(),
                 value: child(value),
                 body: child(body),
             },
@@ -999,11 +1017,13 @@ impl<Child, Literal> NodeKind<Child, Literal> {
             K::Query {
                 visit,
                 slot,
+                name,
                 source,
                 body,
             } => K::Query {
                 visit: *visit,
                 slot: *slot,
+                name: name.clone(),
                 source: child(source),
                 body: child(body),
             },
@@ -1011,6 +1031,8 @@ impl<Child, Literal> NodeKind<Child, Literal> {
             K::Fold {
                 accumulator,
                 binder,
+                accumulator_name,
+                binder_name,
                 source,
                 step,
                 identity,
@@ -1021,6 +1043,8 @@ impl<Child, Literal> NodeKind<Child, Literal> {
                 K::Fold {
                     accumulator: *accumulator,
                     binder: *binder,
+                    accumulator_name: accumulator_name.clone(),
+                    binder_name: binder_name.clone(),
                     source,
                     step,
                     identity,
@@ -1093,6 +1117,7 @@ impl<Child, Literal> NodeKind<Child, Literal> {
                     .map(|arm| CaseArm {
                         member: arm.member,
                         binders: arm.binders.clone(),
+                        names: arm.names.clone(),
                         body: child(&arm.body),
                     })
                     .collect(),
@@ -1127,11 +1152,13 @@ impl<Child, Literal> NodeKind<Child, Literal> {
             },
             K::Seq {
                 slot,
+                name,
                 low,
                 high,
                 body,
             } => K::Seq {
                 slot: *slot,
+                name: name.clone(),
                 low: child(low),
                 high: child(high),
                 body: child(body),

@@ -12,8 +12,8 @@ use filament_eval::{
 use filament_exact::{Charge, ChargePoint, Incomplete, Integer, LimitKind, Meter, Outcome, Value};
 use ix_trace_rs::trace;
 use support::{
-    Toy, add, completed_int, count, int, live_child_three, live_child_two, live_done_three,
-    live_done_two, live_observe, meter, native_chain, native_nested_fit, native_nested_over,
+    Toy, add, completed_int, int, live_child_three, live_child_two, live_done_three, live_done_two,
+    meter, native_carry_call, native_chain, native_nested_fit, native_nested_over,
     native_peak_then_call, nested_fit_child, nested_over_child, signature_of_arity, site, spent,
 };
 
@@ -27,10 +27,6 @@ struct ContextRead {
 
 enum HostAction {
     Call {
-        callable: filament_exact::NodeKey,
-        arguments: Vec<Value>,
-    },
-    CallWithCarries {
         callable: filament_exact::NodeKey,
         arguments: Vec<Value>,
     },
@@ -63,13 +59,6 @@ impl BodyFactory for TestBodyFactory {
                     callable: callable.clone(),
                     arguments: arguments.clone(),
                 },
-                HostAction::CallWithCarries {
-                    callable,
-                    arguments,
-                } => HostAction::CallWithCarries {
-                    callable: callable.clone(),
-                    arguments: arguments.clone(),
-                },
                 HostAction::Carry => HostAction::Carry,
                 HostAction::Nested {
                     callable,
@@ -91,7 +80,6 @@ impl BodyFactory for TestBodyFactory {
             reads: Arc::clone(&self.reads),
             resumes: Arc::clone(&self.resumes),
             carried: None,
-            carried_many: Vec::new(),
         })
     }
 }
@@ -101,7 +89,6 @@ struct TestBody {
     reads: Arc<Mutex<Vec<ContextRead>>>,
     resumes: Arc<Mutex<Vec<&'static str>>>,
     carried: Option<u64>,
-    carried_many: Vec<u64>,
 }
 
 impl TestBody {
@@ -140,38 +127,6 @@ impl Body for TestBody {
             }
             (HostAction::Call { .. }, Resume::Child(child)) => {
                 self.resumes.lock().expect("resume log").push("child");
-                Ok(Transition::Done(*child))
-            }
-            (
-                HostAction::CallWithCarries {
-                    callable,
-                    arguments,
-                },
-                Resume::Start(_),
-            ) => {
-                self.resumes.lock().expect("resume log").push("start");
-                for _ in 0..2 {
-                    meter
-                        .charge(Charge::new(ChargePoint::FunctionCall))
-                        .expect("the test meter admits the in-transition call");
-                    self.carried_many.push(
-                        context
-                            .open(&Integer::from(4_u64))
-                            .expect("each carried frame fits"),
-                    );
-                }
-                self.record(context);
-                Ok(Transition::Call(filament_eval::ChildRequest {
-                    callee: callable.clone(),
-                    arguments: arguments.clone(),
-                    site: site(),
-                }))
-            }
-            (HostAction::CallWithCarries { .. }, Resume::Child(child)) => {
-                self.resumes.lock().expect("resume log").push("child");
-                for carried in self.carried_many.drain(..) {
-                    context.close(carried);
-                }
                 Ok(Transition::Done(*child))
             }
             (HostAction::Carry, Resume::Start(_)) => {
@@ -785,19 +740,19 @@ fn nested_sessions_started_inside_a_transition_inherit_held_frames_and_peak() {
 #[trace("TC-005", "FR-013-AC-7")]
 #[test]
 fn carried_frames_contribute_to_the_next_scheduler_refusal_depth() {
-    let (factory, reads, resumes) = host_factory(HostAction::CallWithCarries {
-        callable: count(),
-        arguments: vec![int(0)],
-    });
-    let mut registry = Registry::new(Toy::default());
-    assert_eq!(
-        registry.register(add(), &signature_of_arity(2), factory),
-        Admission::Accepted
-    );
+    let toy = Toy::default();
+    let contexts = toy.live_contexts();
+    let mut registry = Registry::new(toy);
     let mut fuel = meter(u64::MAX);
     let stopped = registry
-        .begin_call(add(), vec![int(0), int(0)], limit(12, 0), &(), &mut fuel)
-        .expect("root is admitted")
+        .begin_call(
+            native_carry_call(),
+            vec![int(0), int(0)],
+            limit(12, 0),
+            &(),
+            &mut fuel,
+        )
+        .expect("interpreted root is admitted")
         .run()
         .expect("the next scheduler call exceeds the limit");
     let record = incomplete(&stopped);
@@ -806,36 +761,26 @@ fn carried_frames_contribute_to_the_next_scheduler_refusal_depth() {
     assert_eq!(record.next_charge, Integer::from(2_u64));
     assert_eq!(stopped.frame_depth, 2);
     assert_eq!(stopped.peak_live_occurrences, 11);
-    assert_eq!(
-        reads.lock().expect("context reads").last(),
-        Some(&ContextRead {
-            live: 11,
-            limit: 12,
-            peak: 11,
-            nested_held: 11,
-        })
-    );
-    assert_eq!(*resumes.lock().expect("resume log"), vec!["start"]);
+    assert_eq!(*contexts.lock().expect("context log"), vec![(3, 12, 3)]);
+    assert_eq!(spent(&fuel), 4);
 }
 
 #[trace("TC-005", "FR-013-AC-7")]
 #[test]
 fn carried_frames_allow_a_child_and_are_closed_when_the_caller_resumes() {
     let toy = Toy::default();
-    let child_contexts = toy.live_contexts();
-    let (factory, caller_contexts, resumes) = host_factory(HostAction::CallWithCarries {
-        callable: live_observe(),
-        arguments: vec![int(0)],
-    });
+    let contexts = toy.live_contexts();
     let mut registry = Registry::new(toy);
-    assert_eq!(
-        registry.register(add(), &signature_of_arity(2), factory),
-        Admission::Accepted
-    );
     let mut fuel = meter(u64::MAX);
     let session = registry
-        .begin_call(add(), vec![int(0), int(0)], limit(20, 0), &(), &mut fuel)
-        .expect("registered root is admitted");
+        .begin_call(
+            native_carry_call(),
+            vec![int(0), int(0)],
+            limit(20, 0),
+            &(),
+            &mut fuel,
+        )
+        .expect("interpreted root is admitted");
     let session = match session.step() {
         filament_eval::Progress::Runnable(session) => session,
         filament_eval::Progress::Terminal(result) => panic!("root ended early: {result:?}"),
@@ -868,12 +813,9 @@ fn carried_frames_allow_a_child_and_are_closed_when_the_caller_resumes() {
     assert_eq!(completed_int(&completed), Some(0));
     assert_eq!(completed.peak_live_occurrences, 13);
     assert_eq!(
-        *child_contexts.lock().expect("child context log"),
-        vec![(13, 20, 13)]
+        *contexts.lock().expect("context log"),
+        vec![(3, 20, 3), (13, 20, 13), (11, 20, 11)]
     );
-    let caller_contexts = caller_contexts.lock().expect("caller context log");
-    assert_eq!(caller_contexts.last().map(|read| read.live), Some(11));
-    assert_eq!(*resumes.lock().expect("resume log"), vec!["start", "child"]);
     assert_eq!(spent(&fuel), 4);
 }
 

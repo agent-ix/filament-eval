@@ -99,6 +99,27 @@ pub fn live_child_two() -> NodeKey {
 pub fn live_child_three() -> NodeKey {
     key(15)
 }
+pub fn nested_fit_child() -> NodeKey {
+    key(16)
+}
+pub fn nested_over_child() -> NodeKey {
+    key(17)
+}
+pub fn live_done_two() -> NodeKey {
+    key(18)
+}
+pub fn live_done_three() -> NodeKey {
+    key(19)
+}
+pub fn live_done_four() -> NodeKey {
+    key(20)
+}
+pub fn native_nested_fit() -> NodeKey {
+    key(21)
+}
+pub fn native_nested_over() -> NodeKey {
+    key(22)
+}
 
 pub fn signature_of_arity(arity: usize) -> Signature {
     Signature::new(vec![ValueType::Integer; arity], ValueType::Integer)
@@ -205,6 +226,14 @@ pub enum Task {
     Repeat(u64),
     /// Opens and closes an in-transition frame of four occurrences.
     LiveOpen,
+    /// Begins a nested application with the current context's limits.
+    NestedCall {
+        callable: NodeKey,
+        arguments: Vec<Value>,
+        open_occurrences: Option<u64>,
+    },
+    /// Completes without opening another frame.
+    LiveDone,
 }
 
 /// The callables entered, in order, with their integer arguments.
@@ -252,15 +281,31 @@ impl Toy {
             repeat(),
             live_child_two(),
             live_child_three(),
+            nested_fit_child(),
+            nested_over_child(),
+            live_done_two(),
+            live_done_three(),
+            live_done_four(),
+            native_nested_fit(),
+            native_nested_over(),
         ]
         .contains(callable)
     }
 
     fn arity(callable: &NodeKey) -> usize {
-        if *callable == add() || *callable == live_child_two() {
+        if *callable == add()
+            || *callable == live_child_two()
+            || *callable == nested_fit_child()
+            || *callable == nested_over_child()
+            || *callable == native_nested_fit()
+            || *callable == native_nested_over()
+            || *callable == live_done_two()
+        {
             2
-        } else if *callable == live_child_three() {
+        } else if *callable == live_child_three() || *callable == live_done_three() {
             3
+        } else if *callable == live_done_four() {
+            4
         } else {
             1
         }
@@ -387,6 +432,35 @@ impl CheckedClosure for Toy {
             Task::Repeat(0)
         } else if *callable == live_child_two() || *callable == live_child_three() {
             Task::LiveOpen
+        } else if *callable == nested_fit_child() {
+            Task::NestedCall {
+                callable: live_done_three(),
+                arguments: vec![int(0), int(0), int(0)],
+                open_occurrences: None,
+            }
+        } else if *callable == nested_over_child() {
+            Task::NestedCall {
+                callable: live_done_four(),
+                arguments: vec![int(0), int(0), int(0), int(0)],
+                open_occurrences: None,
+            }
+        } else if *callable == native_nested_fit() {
+            Task::NestedCall {
+                callable: live_done_two(),
+                arguments: vec![int(0), int(0)],
+                open_occurrences: Some(4),
+            }
+        } else if *callable == native_nested_over() {
+            Task::NestedCall {
+                callable: live_done_three(),
+                arguments: vec![int(0), int(0), int(0)],
+                open_occurrences: Some(4),
+            }
+        } else if *callable == live_done_two()
+            || *callable == live_done_three()
+            || *callable == live_done_four()
+        {
+            Task::LiveDone
         } else {
             Task::Bodiless
         };
@@ -505,6 +579,53 @@ impl CheckedClosure for Toy {
                     })),
                 }
             }
+            Task::NestedCall {
+                callable,
+                arguments: nested_arguments,
+                open_occurrences,
+            } => {
+                let opened = match open_occurrences {
+                    Some(occurrences) => {
+                        meter
+                            .charge(Charge::new(ChargePoint::FunctionCall))
+                            .expect("the test meter admits the in-transition call");
+                        match context.open(&Integer::from(*occurrences)) {
+                            Ok(opened) => Some(opened),
+                            Err(incomplete) => {
+                                return Ok(Transition::Done(Evaluation {
+                                    outcome: FamilyOutcome::Evaluated(Outcome::Incomplete(
+                                        incomplete,
+                                    )),
+                                    location: Some(site()),
+                                    losses: Vec::new(),
+                                    frame_depth: 0,
+                                    peak_live_occurrences: 0,
+                                }));
+                            }
+                        }
+                    }
+                    None => None,
+                };
+                let limits = context.nested();
+                let mut registry = filament_eval::Registry::new(Toy::default());
+                let nested = registry
+                    .begin_call(
+                        callable.clone(),
+                        nested_arguments.clone(),
+                        limits,
+                        &(),
+                        meter,
+                    )
+                    .map_err(|_| fault("nested-call-not-admitted"))?
+                    .run()
+                    .map_err(|_| fault("nested-call-failed"))?;
+                context.reach(nested.peak_live_occurrences);
+                if let Some(opened) = opened {
+                    context.close(opened);
+                }
+                Ok(Transition::Done(nested))
+            }
+            Task::LiveDone => Ok(Transition::Done(Evaluation::completed(int(0)))),
             Task::CompletedDepth => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
                 location: None,

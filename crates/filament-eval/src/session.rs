@@ -386,7 +386,12 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
 
     /// The number of caller frames above the call being entered.
     fn caller_depth(&self) -> u32 {
-        u32::try_from(self.frames.len().saturating_sub(1)).unwrap_or(u32::MAX)
+        let depth = u64::try_from(self.frames.len().saturating_sub(1))
+            .unwrap_or(u64::MAX)
+            .saturating_add(self.frames.iter().fold(0_u64, |total, frame| {
+                total.saturating_add(frame.carried_frames)
+            }));
+        u32::try_from(depth).unwrap_or(u32::MAX)
     }
 
     /// The located incomplete result of a denied charge. A charge the meter's

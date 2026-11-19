@@ -9,6 +9,7 @@ use filament_semantic_value::location::ExpressionLocation;
 
 use crate::body::Transition;
 use crate::result::{CallFailure, Evaluation};
+use crate::LiveContext;
 use crate::signature::Signature;
 use filament_semantic_value::declaration::EnvironmentFailure;
 
@@ -161,6 +162,7 @@ pub trait CheckedClosure {
         &self,
         task: &mut Self::Task,
         delivered: Option<Evaluation>,
+        context: &mut LiveContext,
         environment: &Self::Environment,
         meter: &mut Meter,
     ) -> Result<Transition, InternalFault>;

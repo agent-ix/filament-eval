@@ -12,6 +12,7 @@ use filament_semantic_value::declaration::{EnvironmentFailure, EnvironmentLimitK
 use filament_semantic_value::location::ExpressionLocation;
 
 use crate::result::Evaluation;
+use crate::LiveContext;
 
 /// A failure returned by a checked body while it is producing one transition.
 ///
@@ -126,7 +127,12 @@ pub trait Body: Send {
     /// # Errors
     ///
     /// A typed FSV environment failure or a broken invariant of the body.
-    fn resume(&mut self, input: Resume, meter: &mut Meter) -> Result<Transition, BodyFailure>;
+    fn resume(
+        &mut self,
+        input: Resume,
+        context: &mut LiveContext,
+        meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure>;
 }
 
 /// Supplies fresh invocation state for each call of a registered callable.

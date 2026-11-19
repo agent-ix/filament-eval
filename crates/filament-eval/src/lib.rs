@@ -38,6 +38,7 @@ mod cause;
 mod closure;
 pub mod collection;
 mod integer;
+mod live_context;
 mod prepare_limit;
 mod registry;
 mod result;
@@ -52,6 +53,7 @@ pub use cause::{
 pub use closure::{CheckedClosure, RequestRefusal};
 pub use filament_semantic_value::admission::ObservationAdmission;
 pub use integer::modulo;
+pub use live_context::LiveContext;
 pub use prepare_limit::{PrepareLimitReached, PrepareSetting};
 pub use registry::{Admission, Registry};
 pub use result::{

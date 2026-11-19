@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex};
 
 use filament_eval::{
     Body, BodyFactory, BodyFailure, CallFailure, CheckedClosure, ChildRequest, Evaluation,
-    FamilyOutcome, RequestRefusal, Resume, Signature, Transition,
+    FamilyOutcome, LiveContext, RequestRefusal, Resume, Signature, Transition,
 };
 use filament_exact::{
     Charge, ChargePoint, IeeeFlag, IeeeWidth, Integer, LimitKind, Meter, NodeKey, Outcome,
@@ -92,6 +92,12 @@ pub fn completed_depth() -> NodeKey {
 /// `REPEAT(n)`: applies `COUNT` to 0 n times in sequence and completes with n.
 pub fn repeat() -> NodeKey {
     key(13)
+}
+pub fn live_child_two() -> NodeKey {
+    key(14)
+}
+pub fn live_child_three() -> NodeKey {
+    key(15)
 }
 
 pub fn signature_of_arity(arity: usize) -> Signature {
@@ -197,6 +203,8 @@ pub enum Task {
     CompletedDepth,
     /// `REPEAT`: how many applications of `COUNT(0)` have returned.
     Repeat(u64),
+    /// Opens and closes an in-transition frame of four occurrences.
+    LiveOpen,
 }
 
 /// The callables entered, in order, with their integer arguments.
@@ -237,15 +245,17 @@ impl Toy {
             recursive_undefined(),
             completed_depth(),
             repeat(),
+            live_child_two(),
+            live_child_three(),
         ]
         .contains(callable)
     }
 
     fn arity(callable: &NodeKey) -> usize {
-        if *callable == add() {
-            2
-        } else {
-            1
+        match *callable {
+            key if key == add() || key == live_child_two() => 2,
+            key if key == live_child_three() => 3,
+            _ => 1,
         }
     }
 }
@@ -368,6 +378,8 @@ impl CheckedClosure for Toy {
             Task::CompletedDepth
         } else if *callable == repeat() {
             Task::Repeat(0)
+        } else if *callable == live_child_two() || *callable == live_child_three() {
+            Task::LiveOpen
         } else {
             Task::Bodiless
         };
@@ -402,8 +414,9 @@ impl CheckedClosure for Toy {
         &self,
         task: &mut Self::Task,
         delivered: Option<Evaluation>,
+        context: &mut LiveContext,
         _environment: &(),
-        _meter: &mut Meter,
+        meter: &mut Meter,
     ) -> Result<Transition, InternalFault> {
         let (state, arguments) = task;
         let argument = arguments
@@ -459,6 +472,24 @@ impl CheckedClosure for Toy {
                     arguments: vec![int(0)],
                     site: site(),
                 }))
+            }
+            Task::LiveOpen => {
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits the in-transition call");
+                match context.open(&Integer::from(4_u64)) {
+                    Ok(occurrences) => {
+                        context.close(occurrences);
+                        Ok(Transition::Done(Evaluation::completed(int(context.live()))))
+                    }
+                    Err(incomplete) => Ok(Transition::Done(Evaluation {
+                        outcome: FamilyOutcome::Evaluated(Outcome::Incomplete(incomplete)),
+                        location: Some(site()),
+                        losses: Vec::new(),
+                        frame_depth: 0,
+                        peak_live_occurrences: 0,
+                    })),
+                }
             }
             Task::CompletedDepth => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
@@ -606,7 +637,12 @@ struct RelayBody {
 }
 
 impl Body for RelayBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         self.counts.resumed.fetch_add(1, Ordering::SeqCst);
         match input {
             Resume::Start(arguments) => {
@@ -675,7 +711,12 @@ impl ChargingBody {
 }
 
 impl Body for ChargingBody {
-    fn resume(&mut self, input: Resume, meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         self.counts.resumed.fetch_add(1, Ordering::SeqCst);
         if let Some(done) = Self::work(meter) {
             return Ok(done);
@@ -726,7 +767,12 @@ struct BadRequestBody {
 }
 
 impl Body for BadRequestBody {
-    fn resume(&mut self, _input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        _input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         Ok(Transition::Call(ChildRequest {
             callee: self.callee.clone(),
             arguments: self.arguments.clone(),
@@ -756,7 +802,12 @@ struct YieldingBody {
 }
 
 impl Body for YieldingBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         match input {
             Resume::Start(arguments) => {
                 self.arguments = arguments;
@@ -784,7 +835,12 @@ impl BodyFactory for Echo {
 struct EchoBody;
 
 impl Body for EchoBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         match input {
             Resume::Start(arguments) => Ok(Transition::Done(Evaluation::completed(
                 arguments.into_iter().next().unwrap_or_else(|| int(0)),
@@ -818,7 +874,12 @@ struct SequenceBody {
 }
 
 impl Body for SequenceBody {
-    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+    fn resume(
+        &mut self,
+        input: Resume,
+        _context: &mut LiveContext,
+        _meter: &mut Meter,
+    ) -> Result<Transition, BodyFailure> {
         if let Resume::Child(child) = input {
             if completed_int(&child).is_none() {
                 return Ok(Transition::Done(*child));

@@ -33,10 +33,12 @@ and gives the same result on every platform, unlike a byte or depth count.
 
 ### The limit
 
-1. `SessionLimits { live_occurrences: u64 }` SHALL be a public `Copy` type
-   whose `Default` sets `live_occurrences` to
+1. `SessionLimits { live_occurrences: u64, held: u64 }` SHALL be a public
+   `Copy` type whose `Default` sets `live_occurrences` to
    `DEFAULT_LIVE_OCCURRENCES`, a public constant equal to 1,048,576 (the
-   default of FSL's `evaluation.live_occurrences` setting).
+   default of FSL's `evaluation.live_occurrences` setting), and `held` to 0.
+   `held` is the count an enclosing application already holds when a session
+   begins inside one of its frames (FR-013).
 2. `Registry::begin_call` and `Registry::begin_expression` SHALL take a
    `SessionLimits` and bind it to the returned session for its life. Every
    `u64` is a valid limit: 0 is a real limit that the first call exceeds, and
@@ -50,7 +52,10 @@ and gives the same result on every platform, unlike a byte or depth count.
    computes it) of each value bound in it at entry: the arguments of a call
    frame, or the parameters of an expression-root frame. Interpreted frames and
    registered host-body frames count alike.
-4. The session's live count is the sum over every frame on its stack. A
+4. The session's live count is `held` plus the sum over every frame on its
+   stack; it starts at `held`. A frame that evaluates calls inside one
+   transition counts them in the `LiveContext` the session lends it, against
+   the same count and limit (FR-013). A
    frame's occurrences enter the count when it is pushed and leave it when its
    body finishes and the frame is popped, and a dropped session holds none.
    Values a body computes or holds after entry are not counted; the work
@@ -80,12 +85,16 @@ and gives the same result on every platform, unlike a byte or depth count.
    ChargePoint::FunctionCall`, located at the call site, with no losses. The
    callee is not bound and no frame is pushed. The granted `function.call`
    charge stays spent; earlier spend is kept. Suspended frames are released
-   without executing their continuations.
+   without executing their continuations. A live-occurrence `Incomplete`
+   that a frame returns from inside its transition ends the application in the
+   same way (FR-013 item 8).
 8. Reaching the limit is incomplete, never a refusal, a `CallFailure` or an
    `InternalFault`, and names no depth or frame count.
 9. The terminal `Evaluation` of every application SHALL carry
-   `peak_live_occurrences: u64`, the largest live count the session reached,
-   the frame of a call stopped by this limit excluded.
+   `peak_live_occurrences: u64`, the largest live count the application
+   reached: `held`, the session's frames, the frames opened inside its frames'
+   transitions and the peaks of sessions nested in them (FR-013 item 6), the
+   frame of a call stopped by this limit excluded.
 
 ## Acceptance Criteria
 
@@ -95,7 +104,7 @@ and gives the same result on every platform, unlike a byte or depth count.
 | FR-011-AC-2 | With `live_occurrences` 4,000,000 `count(600000)` completes all 600,001 calls and its `peak_live_occurrences` is 1,200,002 (600,001 frames of two occurrences); with `live_occurrences` 0 a one-argument call stops `Incomplete` at its root call with `consumed` 0 and `next_charge` 2, binding nothing. | Test (TC-003) |
 | FR-011-AC-3 | Frames leave the count when they return: a body that calls a one-argument callee 10 times in sequence under `live_occurrences` 4 completes, and its `peak_live_occurrences` is 4. A host-body frame counts like an interpreted frame. | Test (TC-003) |
 | FR-011-AC-4 | An argument of `occ` 5 makes its frame count 6; an expression root binding parameters of total `occ` 3 that calls a one-argument callee under `live_occurrences` 5 stops `Incomplete` at that call with `consumed` 4 and `next_charge` 2. | Test (TC-003) |
-| FR-011-AC-5 | No outcome of the limit is a `CallFailure`, a refusal or an `InternalFault`; the stopped call's continuation is never resumed, and the outcome is identical under the std and the no-std build. | Test (TC-003) |
+| FR-011-AC-5 | No outcome of the limit is a `CallFailure`, a refusal or an `InternalFault`; the stopped call's continuation is never resumed, including when the stop arises inside a frame's transition (FR-013-AC-1), and the outcome is identical under the std and the no-std build. | Test (TC-003) |
 
 ## Dependencies
 

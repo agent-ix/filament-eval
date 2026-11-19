@@ -36,11 +36,15 @@ re-running the call.
 1. The selected application's frame is the root call's frame for
    `begin_call` and the expression root's frame for `begin_expression`. Every
    call frame the session pushes above it, interpreted or registered host
-   body, counts one level.
+   body, counts one level, and so does every frame a body opens inside one
+   transition (FR-013 item 4).
 2. An evaluation a body returns with `Transition::Done` carries a
    `frame_depth` relative to that body's frame. A body that originates a
-   non-completed outcome returns it with `frame_depth` 0; the
-   `Evaluation` constructors of this crate set 0. A body that propagates a
+   non-completed outcome returns it with `frame_depth` equal to the number of
+   frames it holds open inside the current transition where the outcome arose:
+   0 for an outcome of the body's own code, 1 for one arising in a frame it
+   opened inside the transition, and one more for each further such frame. The `Evaluation`
+   constructors of this crate set 0. A body that propagates a
    non-completed child evaluation it was delivered SHALL return it with its
    `frame_depth` unchanged.
 3. When the session pops a finished callee frame and delivers its evaluation
@@ -48,7 +52,8 @@ re-running the call.
    `frame_depth` and set a completed evaluation's `frame_depth` to 0. The
    evaluation the selected frame finishes with is the terminal evaluation,
    with no further adjustment, so its `frame_depth` counts the frames above the
-   selected frame.
+   selected frame. A live-occurrence stop a frame returns is not
+   delivered: it ends the application with the `frame_depth` FR-013 item 8 states.
 4. An outcome the session itself produces at a call site, a denied
    `function.call` charge or a reached live-occurrence limit (FR-011), arises
    in the calling frame: its `frame_depth` is the number of call frames open

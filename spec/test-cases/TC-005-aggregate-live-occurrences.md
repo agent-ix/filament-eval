@@ -9,47 +9,60 @@ relationships:
 
 ## Description
 
-Check FR-013's `LiveContext`, the aggregate count across an interpreted
-frame that evaluates a call inside one transition, the reported peak and
-`SessionLimits::held`, through the toy closure of the scheduler tests. The
-toy closure gains an interpreted frame kind that evaluates one nested call
-inside its own transition by FR-013 item 4, so the registry path and the
-native path can be run over the same frames.
+Check FR-013's `LiveContext`, the aggregate count across a frame that
+evaluates calls inside one transition, the end of the application at an
+in-transition stop, the reported peak and `SessionLimits::held`. The tests
+use the toy closure of the scheduler tests. That closure gains an interpreted
+frame kind that evaluates nested calls inside its own transition through
+`LiveContext::open` and `close`, and can begin a nested session with
+`nested()`, so the registry path and the native path run over the same
+frames.
 
-Scope: FR-013-AC-1 to FR-013-AC-5.
+Scope: FR-013-AC-1 to FR-013-AC-6.
 
 ## Test Procedure
 
 1. Registry path: register a host body `P` (two `occ`-1 arguments, frame 3)
-   that requests the interpreted `C` (frame 4) and propagates its result; `C`
+   that requests the interpreted `C` (frame 4) and records every resume; `C`
    evaluates `N` (frame 4) inside its transition. Begin `P` with
    `live_occurrences` 10 and run it. Run the native path (interpreted `P`
    evaluating `C` and `N` inside its transitions) with the same frames and
    limit. Read the outcome, its `Incomplete` fields, `location`,
-   `frame_depth` and the spent `function.call` units.
+   `frame_depth`, the spent `function.call` units and `P`'s recorded resumes.
 2. Repeat both paths with `C` = 3 under `live_occurrences` 10 and under 9; read
    the values and `peak_live_occurrences`.
-3. Record each `LiveContext` the closure receives under step 2's limit 10,
-   with `P` requesting `C` once and twice in sequence; read
-   `Session::live_occurrences` after `P` is pushed and `Session::limits`.
-4. Inside `C`'s transition, begin a session with `LiveContext::nested()` whose
-   root binds a frame of 4, then of 5; run `count(600000)` under
-   `SessionLimits::default()`.
-5. Repeat steps 1, 2 and 4 under the no-std build.
+3. Record each `LiveContext` that `P` and `C` receive under step 2's limit
+   10, with `P` requesting `C` once and then twice in sequence. Read
+   `Session::live_occurrences` after `P` is pushed, and `Session::limits`.
+4. Inside `C`'s transition in the registry path, begin a session with
+   `nested()` whose root binds a frame of 4, then of 5. In the native path,
+   with `C` open inside `P`'s transition, begin one with `nested()` whose
+   root binds 3, then 4. From host body `P`, begin one with `nested()`. Run
+   `count(600000)` under `SessionLimits::default()`.
+5. Interpreted root `P` (3) under `live_occurrences` 20 opens `C` (4) and
+   `N` (4) inside its transition, closes both, and returns `Transition::Call`
+   for `D` (2) on a meter granting three `function.call` charges. Separately,
+   a host body runs a nested session that peaks at 9 and calls `reach`.
+6. Repeat steps 1, 2, 4 and 5 under the no-std build.
 
 ## Expected Results
 
 - Step 1: both paths end `Incomplete` with `LiveOccurrences`, `limit` 10,
-  `consumed` 7, `next_charge` 4, `FunctionCall`, at `C`'s call of `N`, with
-  `frame_depth` 1; three `function.call` units spent; the two outcomes are
-  equal.
-- Step 2: both complete with equal values and peak 10 under 10; both stop with
-  `consumed` 6, `next_charge` 4 under 9.
-- Step 3: `C` sees `live` 6, `limit` 10 at each advance, in both runs of `P`;
-  `live_occurrences` reads 3; `limits` equals the Begin limits.
-- Step 4: the nested session completes holding 10; with a root frame of 5 it
-  stops at its root call with `consumed` 6 and `next_charge` 5; `held` defaults
-  to 0 and `count(600000)` gives FR-011-AC-1's results.
+  `consumed` 7, `next_charge` 4 and `FunctionCall`, at `C`'s call of `N`,
+  with `frame_depth` 1. Three `function.call` units are spent, and the two
+  outcomes are equal. `P` was resumed only once, with `Resume::Start`.
+- Step 2: under 10, both complete with equal values and peak 10; under 9,
+  both stop with `consumed` 6 and `next_charge` 4.
+- Step 3: `P` sees `live` 3. `C` sees `live` 6 and `limit` 10 at each advance,
+  in both runs of `P`. `live_occurrences` reads 3, and `limits` equals the
+  Begin limits.
+- Step 4: registry nested session: `held` 6; root 4 completes at 10; root 5
+  stops with `consumed` 6 and `next_charge` 5 and ends the outer application.
+  Native nested session: `held` 7; root 3 completes at 10; root 4 stops with
+  `consumed` 7. Host-body nested session: `held` 3. Default limits: `held` 0,
+  and `count(600000)` gives FR-011-AC-1's results.
+- Step 5: the application ends `Incomplete` at `D`'s `function.call` with
+  `peak_live_occurrences` 11; the host body's application reports peak 9.
 - No outcome is a `CallFailure`, refusal or fault, and both builds agree.
 
 ## Status

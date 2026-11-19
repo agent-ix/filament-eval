@@ -70,24 +70,24 @@ impl LiveContext {
         if live > self.limit {
             return Err(self.incomplete(occurrences));
         }
+        let Some(open_frames) = self.open_frames.checked_add(1) else {
+            return Err(self.incomplete(occurrences));
+        };
+        let Some(open_occurrences) = self.open_occurrences.checked_add(occurrences_u64) else {
+            return Err(self.incomplete(occurrences));
+        };
 
         self.live = live;
         self.peak = self.peak.max(live);
-        self.open_frames = self
-            .open_frames
-            .checked_add(1)
-            .expect("the number of opened frames fits in the live count");
-        self.open_occurrences = self
-            .open_occurrences
-            .checked_add(occurrences_u64)
-            .expect("opened occurrences fit in the live count");
+        self.open_frames = open_frames;
+        self.open_occurrences = open_occurrences;
         Ok(occurrences_u64)
     }
 
     /// Remove a frame previously returned by [`Self::open`].
     ///
-    /// `occurrences` must be the value returned by an `open` in this context
-    /// or a context descended from it; violating this invariant panics.
+    /// `occurrences` must be the value returned by a matching `open` in this
+    /// context; violating this invariant panics.
     pub fn close(&mut self, occurrences: u64) {
         self.live = self
             .live

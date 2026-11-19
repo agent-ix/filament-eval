@@ -12,8 +12,9 @@
 //!
 //! Interpreted checked code and registered host bodies run on one explicit
 //! heap task stack, so no evaluation step recurses on the native stack in
-//! proportion to call depth, and there is no depth ceiling: the only bound is
-//! the `work_units` fuel of the one [`filament_exact::Meter`] (QSpec FR-146). A
+//! proportion to call depth, and there is no depth ceiling: the bounds are the
+//! `work_units` fuel of the one [`filament_exact::Meter`] (QSpec FR-146) and
+//! the session's live-occurrence limit ([`SessionLimits`], FR-011). A
 //! body that applies a callee never calls an evaluator. It returns a
 //! [`ChildRequest`] and is suspended; the scheduler validates the request,
 //! charges `function.call`, runs the callee and delivers its [`Evaluation`]
@@ -57,7 +58,7 @@ pub use result::{
     CallAdmissionFailure, CallAdmissionLocus, CallAdmissionRecord, CallFailure, EvalOutcome,
     Evaluation, FamilyOutcome, FamilyResult,
 };
-pub use session::{Progress, Session};
+pub use session::{Progress, Session, SessionLimits, DEFAULT_LIVE_OCCURRENCES};
 pub use signature::Signature;
 pub use unsupported::{
     ExecutionBackendChoice, UnsupportedCause, UnsupportedEntry, UnsupportedPayload,

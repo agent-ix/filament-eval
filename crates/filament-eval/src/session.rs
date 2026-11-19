@@ -8,7 +8,9 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::mem;
 
-use filament_exact::{Charge, ChargePoint, Incomplete, Meter, NodeKey, Outcome, Value};
+use filament_exact::{
+    Charge, ChargePoint, Incomplete, Integer, LimitKind, Meter, NodeKey, Outcome, Value,
+};
 use filament_semantic_value::catalog::InternalFault;
 use filament_semantic_value::location::ExpressionLocation;
 
@@ -16,6 +18,29 @@ use crate::body::{Body, ChildRequest, Resume, Transition};
 use crate::closure::{CheckedClosure, RequestRefusal};
 use crate::registry::Bindings;
 use crate::result::{CallFailure, Evaluation, FamilyOutcome};
+
+/// The default live-occurrence limit of a session: 1,048,576, the default of
+/// FSL's `evaluation.live_occurrences` setting (FR-011).
+pub const DEFAULT_LIVE_OCCURRENCES: u64 = 1_048_576;
+
+/// The bounds a session enforces itself, bound to it for life at `Begin`
+/// (FR-011). The caller supplies them; this crate reads no ambient setting.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct SessionLimits {
+    /// The largest live-occurrence count the session may hold: the sum, over
+    /// its frames, of one per frame plus the occurrences (`occ`) of the values
+    /// bound in it at entry. Every value is a valid limit; 0 stops the first
+    /// call.
+    pub live_occurrences: u64,
+}
+
+impl Default for SessionLimits {
+    fn default() -> Self {
+        Self {
+            live_occurrences: DEFAULT_LIVE_OCCURRENCES,
+        }
+    }
+}
 
 /// What the scheduler enters next, before any frame of it exists.
 pub(crate) enum Entry<C: CheckedClosure> {
@@ -43,6 +68,8 @@ enum Engine<C: CheckedClosure> {
 struct Frame<C: CheckedClosure> {
     engine: Engine<C>,
     input: Resume,
+    /// This frame's live occurrences, counted while it is on the stack.
+    occurrences: u64,
 }
 
 /// The result of one [`Session::step`].
@@ -75,6 +102,11 @@ pub struct Session<'a, C: CheckedClosure> {
     entry: Option<Entry<C>>,
     /// The task stack: the callee is on top, its suspended callers below.
     frames: Vec<Frame<C>>,
+    limits: SessionLimits,
+    /// The live-occurrence count of `frames`.
+    live: u64,
+    /// The largest `live` reached.
+    peak: u64,
 }
 
 impl<'a, C: CheckedClosure> Session<'a, C> {
@@ -82,6 +114,7 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
         closure: Arc<C>,
         bindings: Arc<Bindings>,
         entry: Entry<C>,
+        limits: SessionLimits,
         environment: &'a C::Environment,
         meter: &'a mut Meter,
     ) -> Self {
@@ -92,6 +125,9 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
             meter,
             entry: Some(entry),
             frames: Vec::new(),
+            limits,
+            live: 0,
+            peak: 0,
         }
     }
 
@@ -104,7 +140,10 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
     pub fn step(mut self) -> Progress<'a, C> {
         match self.transition() {
             Ok(None) => Progress::Runnable(self),
-            Ok(Some(evaluation)) => Progress::Terminal(Ok(evaluation)),
+            Ok(Some(mut evaluation)) => {
+                evaluation.peak_live_occurrences = self.peak;
+                Progress::Terminal(Ok(evaluation))
+            }
             Err(failure) => Progress::Terminal(Err(failure)),
         }
     }
@@ -159,12 +198,13 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                 if completed {
                     evaluation.frame_depth = 0;
                 }
-                self.frames.pop();
+                self.pop();
                 match self.frames.last_mut() {
                     Some(caller) => {
                         if !completed {
                             evaluation.frame_depth = evaluation.frame_depth.saturating_add(1);
                         }
+                        evaluation.peak_live_occurrences = self.peak;
                         caller.input = Resume::Child(Box::new(evaluation));
                     }
                     None => return Ok(Some(evaluation)),
@@ -208,21 +248,28 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                 expression,
                 parameters,
             } => {
+                // An expression root makes no call, so its frame is counted
+                // but not tested; each call it reaches is tested with it
+                // included. A count past `u64::MAX` saturates there, which
+                // still exceeds every limit at the first call.
+                let occurrences = frame_occurrences(&parameters).to_u64().unwrap_or(u64::MAX);
                 let task =
                     self.closure
                         .bind_expression(&expression, parameters, self.environment)?;
-                self.frames.push(Frame {
+                self.push(Frame {
                     engine: Engine::Interpreted(task),
                     input: Resume::Again,
+                    occurrences,
                 });
                 Ok(None)
             }
         }
     }
 
-    /// Charge `function.call` for an admitted application, then bind and push
-    /// its frame: a registered host body when `callable` has one, otherwise
-    /// the closure's interpreted body.
+    /// Charge `function.call` for an admitted application, test its frame
+    /// against the live-occurrence limit, then bind and push the frame: a
+    /// registered host body when `callable` has one, otherwise the closure's
+    /// interpreted body.
     fn enter_call(
         &mut self,
         callable: NodeKey,
@@ -230,14 +277,25 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
         site: Option<ExpressionLocation>,
     ) -> Result<Option<Evaluation>, CallFailure> {
         if let Err(denied) = self.meter.charge(Charge::new(ChargePoint::FunctionCall)) {
-            let frame_depth =
-                u32::try_from(self.frames.len().saturating_sub(1)).unwrap_or(u32::MAX);
-            return Ok(Some(Self::incomplete(denied, site, frame_depth)));
+            return Ok(Some(Self::incomplete(denied, site, self.caller_depth())));
         }
+        let next_charge = frame_occurrences(&arguments);
+        let Some(occurrences) = self.admit_frame(&next_charge) else {
+            // The granted call charge stays spent; the callee is not bound.
+            let stopped = Incomplete {
+                limit_kind: LimitKind::LiveOccurrences,
+                limit: self.limits.live_occurrences,
+                consumed: self.live,
+                next_charge,
+                charge_point: ChargePoint::FunctionCall,
+            };
+            return Ok(Some(Self::incomplete(stopped, site, self.caller_depth())));
+        };
         let frame = match self.bindings.get(&callable) {
             Some(factory) => Frame {
                 engine: Engine::Host(factory.begin()),
                 input: Resume::Start(arguments),
+                occurrences,
             },
             None => Frame {
                 engine: Engine::Interpreted(self.closure.bind_call(
@@ -246,10 +304,40 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
                     self.environment,
                 )?),
                 input: Resume::Again,
+                occurrences,
             },
         };
-        self.frames.push(frame);
+        self.push(frame);
         Ok(None)
+    }
+
+    /// The new frame's occurrences when adding them keeps the live count
+    /// within the limit, or `None` when it would exceed it. The arithmetic
+    /// is checked: a count past `u64::MAX` exceeds every limit.
+    fn admit_frame(&self, occurrences: &Integer) -> Option<u64> {
+        let occurrences = occurrences.to_u64()?;
+        let total = self.live.checked_add(occurrences)?;
+        (total <= self.limits.live_occurrences).then_some(occurrences)
+    }
+
+    /// Push `frame`, adding its occurrences to the live count.
+    fn push(&mut self, frame: Frame<C>) {
+        self.live = self.live.saturating_add(frame.occurrences);
+        self.peak = self.peak.max(self.live);
+        self.frames.push(frame);
+    }
+
+    /// Pop the top frame, removing its occurrences from the live count. The
+    /// live count is the sum of the pushed frames, so it never saturates.
+    fn pop(&mut self) {
+        if let Some(frame) = self.frames.pop() {
+            self.live = self.live.saturating_sub(frame.occurrences);
+        }
+    }
+
+    /// The number of caller frames above the call being entered.
+    fn caller_depth(&self) -> u32 {
+        u32::try_from(self.frames.len().saturating_sub(1)).unwrap_or(u32::MAX)
     }
 
     /// The located incomplete result of a denied charge. A charge the meter's
@@ -266,8 +354,16 @@ impl<'a, C: CheckedClosure> Session<'a, C> {
             location: site,
             losses: Vec::new(),
             frame_depth,
+            peak_live_occurrences: 0,
         }
     }
+}
+
+/// One for the frame plus `occ` of each value bound in it at entry (FR-011).
+fn frame_occurrences(values: &[Value]) -> Integer {
+    values
+        .iter()
+        .fold(Integer::one(), |sum, value| sum.add(&value.occ()))
 }
 
 fn is_completed(evaluation: &Evaluation) -> bool {

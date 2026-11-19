@@ -94,6 +94,13 @@ pub struct Evaluation {
     /// The number of caller frames above the call where a non-completed
     /// outcome originated. Completed outcomes always have depth zero.
     pub frame_depth: u32,
+    /// The largest live-occurrence count the session reached (FR-011): the
+    /// sum, over its frames, of one per frame plus the occurrences of the
+    /// values bound in it at entry. The frame of a call stopped by the
+    /// live-occurrence limit is excluded. The session sets it on the terminal
+    /// evaluation and on each child evaluation it delivers; an evaluation a
+    /// body builds carries zero until then.
+    pub peak_live_occurrences: u64,
 }
 
 /// The locus named by an admission failure for a checked package call.
@@ -280,6 +287,7 @@ impl Evaluation {
             location: None,
             losses: Vec::new(),
             frame_depth: 0,
+            peak_live_occurrences: 0,
         }
     }
 }

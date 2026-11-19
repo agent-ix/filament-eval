@@ -29,7 +29,7 @@ To work from a clone, install the Rust toolchain pinned in `rust-toolchain.toml`
 An evaluator implements `CheckedClosure` for its checked terms. A caller registers host bodies in a `Registry`, begins a call, and steps the session until it ends:
 
 ```rust
-use filament_eval::{CallFailure, CheckedClosure, Evaluation, Progress, Registry};
+use filament_eval::{CallFailure, CheckedClosure, Evaluation, Progress, Registry, SessionLimits};
 use filament_exact::{Meter, NodeKey, Value};
 
 fn call<C: CheckedClosure>(
@@ -39,7 +39,13 @@ fn call<C: CheckedClosure>(
     environment: &C::Environment,
     meter: &mut Meter,
 ) -> Result<Evaluation, CallFailure> {
-    let mut session = registry.begin_call(callable, arguments, environment, meter)?;
+    let mut session = registry.begin_call(
+        callable,
+        arguments,
+        SessionLimits::default(),
+        environment,
+        meter,
+    )?;
     loop {
         match session.step() {
             Progress::Runnable(next) => session = next,
@@ -49,7 +55,7 @@ fn call<C: CheckedClosure>(
 }
 ```
 
-The first successful `begin_call` seals the registry. `Session::run` performs the same loop.
+The first successful `begin_call` seals the registry. `Session::run` performs the same loop. The session counts the live occurrences of its frames (one per frame plus the occurrences of its bound arguments) against `SessionLimits::live_occurrences`, 1,048,576 by default, and stops with an `Incomplete` outcome of kind `LiveOccurrences` at the call that would exceed it.
 
 A host body implements `Body`. Each call to `resume` runs one transition and returns `Transition::Continue`, `Transition::Call` with a `ChildRequest` for a callee, or `Transition::Done` with the body's `Evaluation`. The scheduler validates the request, charges `function.call`, runs the callee and delivers its result to the suspended body once.
 

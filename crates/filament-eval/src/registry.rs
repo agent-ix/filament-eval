@@ -12,7 +12,7 @@ use filament_semantic_value::catalog::InternalFault;
 use crate::body::BodyFactory;
 use crate::closure::CheckedClosure;
 use crate::result::CallFailure;
-use crate::session::{Entry, Session};
+use crate::session::{Entry, Session, SessionLimits};
 use crate::signature::Signature;
 
 /// The bindings a sealed registry holds, shared by every session that uses it.
@@ -116,7 +116,9 @@ impl<C: CheckedClosure> Registry<C> {
     ///
     /// Admission runs first and charges nothing. On success the registry is
     /// sealed before any factory invocation or charge, and the returned
-    /// session is bound to this closure, `environment` and `meter`. The
+    /// session is bound to this closure, `limits`, `environment` and `meter`.
+    /// The session counts its live occurrences against `limits` for its life
+    /// and stops incomplete at the call that would exceed them (FR-011). The
     /// cancellation handle the meter carries, if any, is the session's: a meter without one
     /// cannot be cancelled.
     /// The call's `function.call` charge is the session's first transition.
@@ -130,6 +132,7 @@ impl<C: CheckedClosure> Registry<C> {
         &mut self,
         callable: NodeKey,
         arguments: Vec<Value>,
+        limits: SessionLimits,
         environment: &'a C::Environment,
         meter: &'a mut Meter,
     ) -> Result<Session<'a, C>, CallFailure> {
@@ -143,7 +146,7 @@ impl<C: CheckedClosure> Registry<C> {
             arguments,
             site,
         };
-        Ok(self.session(entry, environment, meter))
+        Ok(self.session(entry, limits, environment, meter))
     }
 
     /// Begin the evaluation of `expression` with the completed `parameters`.
@@ -158,6 +161,7 @@ impl<C: CheckedClosure> Registry<C> {
         &mut self,
         expression: C::Expression,
         parameters: Vec<Value>,
+        limits: SessionLimits,
         environment: &'a C::Environment,
         meter: &'a mut Meter,
     ) -> Result<Session<'a, C>, CallFailure> {
@@ -167,12 +171,13 @@ impl<C: CheckedClosure> Registry<C> {
             expression,
             parameters,
         };
-        Ok(self.session(entry, environment, meter))
+        Ok(self.session(entry, limits, environment, meter))
     }
 
     fn session<'a>(
         &mut self,
         entry: Entry<C>,
+        limits: SessionLimits,
         environment: &'a C::Environment,
         meter: &'a mut Meter,
     ) -> Session<'a, C> {
@@ -181,6 +186,7 @@ impl<C: CheckedClosure> Registry<C> {
             Arc::clone(&self.closure),
             bindings,
             entry,
+            limits,
             environment,
             meter,
         )

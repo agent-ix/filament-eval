@@ -38,4 +38,4 @@ refusal or fault, and both builds agree.
 
 ## Status
 
-Ignored stubs in `crates/filament-eval/tests/live_occurrences.rs`.
+Implemented in `crates/filament-eval/tests/live_occurrences.rs`.

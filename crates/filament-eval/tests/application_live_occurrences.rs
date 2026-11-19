@@ -12,9 +12,9 @@ use filament_eval::{
 use filament_exact::{Charge, ChargePoint, Incomplete, Integer, LimitKind, Meter, Outcome, Value};
 use ix_trace_rs::trace;
 use support::{
-    add, completed_int, count, int, live_child_three, live_child_two, live_done_three,
-    live_done_two, meter, native_nested_fit, native_nested_over, nested_fit_child,
-    nested_over_child, signature_of_arity, site, spent, Toy,
+    Toy, add, completed_int, count, int, live_child_three, live_child_two, live_done_three,
+    live_done_two, meter, native_chain, native_nested_fit, native_nested_over,
+    native_peak_then_call, nested_fit_child, nested_over_child, signature_of_arity, site, spent,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -542,6 +542,133 @@ fn a_lower_limit_refuses_the_in_transition_frame() {
     assert_eq!(stopped.frame_depth, 1);
     assert_eq!(stopped.peak_live_occurrences, 6);
     assert_eq!(*resumes.lock().expect("resume log"), vec!["start"]);
+}
+
+#[trace("TC-005", "FR-013-AC-2")]
+#[test]
+fn interpreted_and_registry_paths_agree_for_three_occurrence_child_frames() {
+    let (factory, _reads, _resumes) = host_factory(HostAction::Call {
+        callable: live_child_two(),
+        arguments: vec![int(0), int(0)],
+    });
+    let mut registry = Registry::new(Toy::default());
+    assert_eq!(
+        registry.register(add(), &signature_of_arity(2), factory),
+        Admission::Accepted
+    );
+    let mut registry_fuel = meter(u64::MAX);
+    let registry_completed = registry
+        .begin_call(
+            add(),
+            vec![int(0), int(0)],
+            limit(10, 0),
+            &(),
+            &mut registry_fuel,
+        )
+        .expect("registered root is admitted")
+        .run()
+        .expect("registry path completes at ten");
+    let mut native = Registry::new(Toy::default());
+    let mut native_fuel = meter(u64::MAX);
+    let native_completed = native
+        .begin_call(
+            native_chain(),
+            vec![int(0), int(0)],
+            limit(10, 0),
+            &(),
+            &mut native_fuel,
+        )
+        .expect("interpreted root is admitted")
+        .run()
+        .expect("interpreted path completes at ten");
+    assert_eq!(completed_int(&registry_completed), Some(6));
+    assert_eq!(
+        completed_int(&native_completed),
+        completed_int(&registry_completed)
+    );
+    assert_eq!(
+        native_completed.peak_live_occurrences,
+        registry_completed.peak_live_occurrences
+    );
+    assert_eq!(native_completed.location, registry_completed.location);
+    assert_eq!(native_completed.frame_depth, registry_completed.frame_depth);
+    assert_eq!(spent(&registry_fuel), 3);
+    assert_eq!(spent(&native_fuel), 3);
+
+    let (factory, _reads, _resumes) = host_factory(HostAction::Call {
+        callable: live_child_two(),
+        arguments: vec![int(0), int(0)],
+    });
+    let mut registry = Registry::new(Toy::default());
+    assert_eq!(
+        registry.register(add(), &signature_of_arity(2), factory),
+        Admission::Accepted
+    );
+    let mut registry_fuel = meter(u64::MAX);
+    let registry_stopped = registry
+        .begin_call(
+            add(),
+            vec![int(0), int(0)],
+            limit(9, 0),
+            &(),
+            &mut registry_fuel,
+        )
+        .expect("registered root is admitted")
+        .run()
+        .expect("registry live stop is an evaluation");
+    let mut native = Registry::new(Toy::default());
+    let mut native_fuel = meter(u64::MAX);
+    let native_stopped = native
+        .begin_call(
+            native_chain(),
+            vec![int(0), int(0)],
+            limit(9, 0),
+            &(),
+            &mut native_fuel,
+        )
+        .expect("interpreted root is admitted")
+        .run()
+        .expect("interpreted live stop is an evaluation");
+    let registry_record = incomplete(&registry_stopped);
+    let native_record = incomplete(&native_stopped);
+    assert_eq!(native_record.limit_kind, registry_record.limit_kind);
+    assert_eq!(native_record.limit, registry_record.limit);
+    assert_eq!(native_record.consumed, registry_record.consumed);
+    assert_eq!(native_record.next_charge, registry_record.next_charge);
+    assert_eq!(native_record.charge_point, registry_record.charge_point);
+    assert_eq!(native_stopped.location, registry_stopped.location);
+    assert_eq!(native_stopped.frame_depth, registry_stopped.frame_depth);
+    assert_eq!(
+        native_stopped.peak_live_occurrences,
+        registry_stopped.peak_live_occurrences
+    );
+    assert_eq!(native_record.consumed, 6);
+    assert_eq!(native_record.next_charge, Integer::from(4_u64));
+    assert_eq!(spent(&registry_fuel), 3);
+    assert_eq!(spent(&native_fuel), 3);
+}
+
+#[trace("TC-005", "FR-013-AC-5")]
+#[test]
+fn interpreted_transition_peak_survives_a_later_denied_child_call() {
+    let mut registry = Registry::new(Toy::default());
+    let mut fuel = meter(3);
+    let stopped = registry
+        .begin_call(
+            native_peak_then_call(),
+            vec![int(0), int(0)],
+            limit(20, 0),
+            &(),
+            &mut fuel,
+        )
+        .expect("interpreted root is admitted")
+        .run()
+        .expect("the denied child call is an incomplete evaluation");
+    let record = incomplete(&stopped);
+    assert_eq!(record.limit_kind, LimitKind::WorkUnits);
+    assert_eq!(stopped.location, Some(site()));
+    assert_eq!(stopped.peak_live_occurrences, 11);
+    assert_eq!(spent(&fuel), 3);
 }
 
 #[trace("TC-005", "FR-013-AC-4")]

@@ -120,6 +120,12 @@ pub fn native_nested_fit() -> NodeKey {
 pub fn native_nested_over() -> NodeKey {
     key(22)
 }
+pub fn native_chain() -> NodeKey {
+    key(23)
+}
+pub fn native_peak_then_call() -> NodeKey {
+    key(24)
+}
 
 pub fn signature_of_arity(arity: usize) -> Signature {
     Signature::new(vec![ValueType::Integer; arity], ValueType::Integer)
@@ -232,6 +238,10 @@ pub enum Task {
         arguments: Vec<Value>,
         open_occurrences: Option<u64>,
     },
+    /// Calls a child which opens and closes an in-transition frame.
+    NativeChain,
+    /// Opens and closes two in-transition frames, then requests a child.
+    NativePeakThenCall,
     /// Completes without opening another frame.
     LiveDone,
 }
@@ -288,6 +298,8 @@ impl Toy {
             live_done_four(),
             native_nested_fit(),
             native_nested_over(),
+            native_chain(),
+            native_peak_then_call(),
         ]
         .contains(callable)
     }
@@ -299,6 +311,8 @@ impl Toy {
             || *callable == nested_over_child()
             || *callable == native_nested_fit()
             || *callable == native_nested_over()
+            || *callable == native_chain()
+            || *callable == native_peak_then_call()
             || *callable == live_done_two()
         {
             2
@@ -456,6 +470,10 @@ impl CheckedClosure for Toy {
                 arguments: vec![int(0), int(0), int(0)],
                 open_occurrences: Some(4),
             }
+        } else if *callable == native_chain() {
+            Task::NativeChain
+        } else if *callable == native_peak_then_call() {
+            Task::NativePeakThenCall
         } else if *callable == live_done_two()
             || *callable == live_done_three()
             || *callable == live_done_four()
@@ -624,6 +642,32 @@ impl CheckedClosure for Toy {
                     context.close(opened);
                 }
                 Ok(Transition::Done(nested))
+            }
+            Task::NativeChain => {
+                *state = Task::Applied;
+                Ok(Transition::Call(ChildRequest {
+                    callee: live_child_two(),
+                    arguments: vec![int(0), int(0)],
+                    site: site(),
+                }))
+            }
+            Task::NativePeakThenCall => {
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits C");
+                let c = context.open(&Integer::from(4_u64)).expect("C fits");
+                meter
+                    .charge(Charge::new(ChargePoint::FunctionCall))
+                    .expect("the test meter admits N");
+                let n = context.open(&Integer::from(4_u64)).expect("N fits");
+                context.close(n);
+                context.close(c);
+                *state = Task::Applied;
+                Ok(Transition::Call(ChildRequest {
+                    callee: live_done_two(),
+                    arguments: vec![int(0), int(0)],
+                    site: site(),
+                }))
             }
             Task::LiveDone => Ok(Transition::Done(Evaluation::completed(int(0)))),
             Task::CompletedDepth => Ok(Transition::Done(Evaluation {

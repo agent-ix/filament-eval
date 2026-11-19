@@ -3,7 +3,9 @@
 
 mod support;
 
-use filament_eval::{Admission, CallFailure, FamilyOutcome, Progress, Registry, Signature};
+use filament_eval::{
+    Admission, CallFailure, FamilyOutcome, Progress, Registry, SessionLimits, Signature,
+};
 use filament_exact::{Cancel, CancelCause, ChargePoint, LimitKind, Outcome, ValueType};
 use filament_semantic_value::call::InputRefusal;
 use support::{
@@ -59,7 +61,7 @@ fn a_failed_begin_leaves_the_registry_open_and_a_successful_begin_seals_it() {
     let mut m = meter(1_000);
 
     // Wrong arity: refused before any charge.
-    let refused = registry.begin_call(count(), vec![], &(), &mut m);
+    let refused = registry.begin_call(count(), vec![], SessionLimits::default(), &(), &mut m);
     assert!(matches!(
         refused,
         Err(CallFailure::Input(InputRefusal::Arity {
@@ -68,13 +70,25 @@ fn a_failed_begin_leaves_the_registry_open_and_a_successful_begin_seals_it() {
         }))
     ));
     assert!(!registry.is_sealed());
-    let unknown = registry.begin_call(absent(), vec![int(0)], &(), &mut m);
+    let unknown = registry.begin_call(
+        absent(),
+        vec![int(0)],
+        SessionLimits::default(),
+        &(),
+        &mut m,
+    );
     assert!(matches!(
         unknown,
         Err(CallFailure::Input(InputRefusal::UnknownFunction(_)))
     ));
     assert!(!registry.is_sealed());
-    let expression = registry.begin_expression(Expression::Literal(1), vec![int(0)], &(), &mut m);
+    let expression = registry.begin_expression(
+        Expression::Literal(1),
+        vec![int(0)],
+        SessionLimits::default(),
+        &(),
+        &mut m,
+    );
     assert!(matches!(expression, Err(CallFailure::Input(_))));
     assert!(!registry.is_sealed());
     assert_eq!(spent(&m), 0, "a rejected root input charges nothing");
@@ -85,7 +99,7 @@ fn a_failed_begin_leaves_the_registry_open_and_a_successful_begin_seals_it() {
     );
 
     let session = registry
-        .begin_call(count(), vec![int(0)], &(), &mut m)
+        .begin_call(count(), vec![int(0)], SessionLimits::default(), &(), &mut m)
         .expect("admitted call");
     assert!(registry.is_sealed());
     drop(session);
@@ -104,7 +118,13 @@ fn a_sealed_registry_keeps_its_bindings_for_every_session() {
     );
     let mut m = meter(1_000);
     let ran = registry
-        .begin_call(host_a(), vec![int(3)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(3)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted call")
         .run()
         .expect("application");
@@ -127,7 +147,13 @@ fn a_sealed_registry_keeps_its_bindings_for_every_session() {
     // A later session still runs the first factory's body, not the refused one.
     let mut again = meter(1_000);
     let later = registry
-        .begin_call(host_a(), vec![int(2)], &(), &mut again)
+        .begin_call(
+            host_a(),
+            vec![int(2)],
+            SessionLimits::default(),
+            &(),
+            &mut again,
+        )
         .expect("admitted call")
         .run()
         .expect("application");
@@ -141,7 +167,13 @@ fn a_literal_expression_charges_no_call_and_a_step_is_not_a_charge() {
     let mut registry = Registry::new(Toy::default());
     let mut m = meter(0);
     let mut session = registry
-        .begin_expression(Expression::Literal(7), vec![], &(), &mut m)
+        .begin_expression(
+            Expression::Literal(7),
+            vec![],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted expression");
     let mut steps = 0;
     let result = loop {
@@ -173,7 +205,7 @@ fn begin_observes_the_meters_cancelled_handle_before_any_charge() {
     let cancel = filament_exact::Cancel::new();
     cancel.cancel(filament_exact::CancelCause::Deadline);
     let mut m = meter(1_000).with_cancel(cancel);
-    let refused = registry.begin_call(count(), vec![int(1)], &(), &mut m);
+    let refused = registry.begin_call(count(), vec![int(1)], SessionLimits::default(), &(), &mut m);
     assert!(matches!(
         refused,
         Err(CallFailure::Cancelled(
@@ -191,7 +223,7 @@ fn missing_checked_body_root_refuses_begin_without_sealing_or_charging() {
     let binds = toy.binds();
     let mut registry = Registry::new(toy);
     let mut m = meter(1_000);
-    let refused = registry.begin_call(count(), vec![int(1)], &(), &mut m);
+    let refused = registry.begin_call(count(), vec![int(1)], SessionLimits::default(), &(), &mut m);
     match refused {
         Err(CallFailure::Fault(fault)) => assert_eq!(
             (fault.stage(), fault.invariant()),
@@ -218,7 +250,13 @@ fn each_root_call_denial_uses_its_admitted_body_site() {
     for callable in [count(), host_a()] {
         let mut m = meter(0);
         let result = registry
-            .begin_call(callable.clone(), vec![int(1)], &(), &mut m)
+            .begin_call(
+                callable.clone(),
+                vec![int(1)],
+                SessionLimits::default(),
+                &(),
+                &mut m,
+            )
             .expect("admitted root")
             .run()
             .expect("a denied charge is an evaluation");
@@ -241,7 +279,13 @@ fn cancellation_after_begin_locates_the_denied_root_call() {
     let cancel = Cancel::new();
     let mut m = meter(1_000).with_cancel(cancel.clone());
     let session = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted root");
     cancel.cancel(CancelCause::Requested);
     let result = session.run().expect("a denied charge is an evaluation");

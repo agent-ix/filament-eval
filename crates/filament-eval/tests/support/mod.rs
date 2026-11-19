@@ -9,6 +9,7 @@
 //! - `REFUSE(n)`: always refused, located at its call site;
 //! - `LOSSY(n)`: completes with `1` and one loss record;
 //! - `ADD(a, b)`: `a + b`;
+//! - `REPEAT(n)`: applies `COUNT(0)` n times in sequence, then `n`;
 //!
 //! and `HOST_A` and `HOST_B`, admitted callables with no interpreted body, so
 //! they can only run as registered host bodies. These tests exercise the
@@ -88,6 +89,10 @@ pub fn recursive_undefined() -> NodeKey {
 pub fn completed_depth() -> NodeKey {
     key(12)
 }
+/// `REPEAT(n)`: applies `COUNT` to 0 n times in sequence and completes with n.
+pub fn repeat() -> NodeKey {
+    key(13)
+}
 
 pub fn signature_of_arity(arity: usize) -> Signature {
     Signature::new(vec![ValueType::Integer; arity], ValueType::Integer)
@@ -156,6 +161,8 @@ pub enum Expression {
     Literal(u64),
     /// Apply `callee` to `argument`, completing with its value.
     Apply { callee: NodeKey, argument: u64 },
+    /// As `Apply`, but admitted with any parameters, which it binds unused.
+    ApplyWith { callee: NodeKey, argument: u64 },
     /// Apply `outer` to the values of `left` and then `right`: the source call
     /// `outer(left(x), right(y))`, whose argument applications run left to
     /// right before `outer`'s own call.
@@ -188,6 +195,8 @@ pub enum Task {
     Bodiless,
     RecursiveUndefined,
     CompletedDepth,
+    /// `REPEAT`: how many applications of `COUNT(0)` have returned.
+    Repeat(u64),
 }
 
 /// The callables entered, in order, with their integer arguments.
@@ -227,12 +236,17 @@ impl Toy {
             population(),
             recursive_undefined(),
             completed_depth(),
+            repeat(),
         ]
         .contains(callable)
     }
 
     fn arity(callable: &NodeKey) -> usize {
-        if *callable == add() { 2 } else { 1 }
+        if *callable == add() {
+            2
+        } else {
+            1
+        }
     }
 }
 
@@ -312,12 +326,12 @@ impl CheckedClosure for Toy {
 
     fn admit_expression(
         &self,
-        _expression: &Expression,
+        expression: &Expression,
         parameters: &[Value],
         _environment: &(),
         _meter: &Meter,
     ) -> Result<(), CallFailure> {
-        if parameters.is_empty() {
+        if parameters.is_empty() || matches!(expression, Expression::ApplyWith { .. }) {
             Ok(())
         } else {
             Err(InputRefusal::Arity {
@@ -352,6 +366,8 @@ impl CheckedClosure for Toy {
             Task::RecursiveUndefined
         } else if *callable == completed_depth() {
             Task::CompletedDepth
+        } else if *callable == repeat() {
+            Task::Repeat(0)
         } else {
             Task::Bodiless
         };
@@ -366,10 +382,12 @@ impl CheckedClosure for Toy {
     ) -> Result<Self::Task, InternalFault> {
         let task = match expression {
             Expression::Literal(n) => Task::Literal(*n),
-            Expression::Apply { callee, argument } => Task::Apply {
-                callee: callee.clone(),
-                argument: *argument,
-            },
+            Expression::Apply { callee, argument } | Expression::ApplyWith { callee, argument } => {
+                Task::Apply {
+                    callee: callee.clone(),
+                    argument: *argument,
+                }
+            }
             Expression::Nested { outer, left, right } => Task::Nested {
                 outer: outer.clone(),
                 left: left.clone(),
@@ -418,6 +436,7 @@ impl CheckedClosure for Toy {
                     location: Some(site()),
                     losses: Vec::new(),
                     frame_depth: 0,
+                    peak_live_occurrences: 0,
                 })),
                 None => Ok(Transition::Call(ChildRequest {
                     callee: recursive_undefined(),
@@ -425,17 +444,35 @@ impl CheckedClosure for Toy {
                     site: count_site(argument - 1),
                 })),
             },
+            Task::Repeat(returned) => {
+                if let Some(child) = delivered {
+                    if completed_int(&child).is_none() {
+                        return Ok(Transition::Done(child));
+                    }
+                    *returned += 1;
+                }
+                if *returned == argument {
+                    return Ok(Transition::Done(Evaluation::completed(int(argument))));
+                }
+                Ok(Transition::Call(ChildRequest {
+                    callee: count(),
+                    arguments: vec![int(0)],
+                    site: site(),
+                }))
+            }
             Task::CompletedDepth => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
                 location: None,
                 losses: Vec::new(),
                 frame_depth: 7,
+                peak_live_occurrences: 0,
             })),
             Task::Boom => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Undefined(Undefined::DivisionByZero)),
                 location: Some(site()),
                 losses: Vec::new(),
                 frame_depth: 0,
+                peak_live_occurrences: 0,
             })),
             Task::Add => Ok(Transition::Done(Evaluation::completed(int(integers(
                 arguments,
@@ -452,12 +489,14 @@ impl CheckedClosure for Toy {
                 location: Some(site()),
                 losses: Vec::new(),
                 frame_depth: 0,
+                peak_live_occurrences: 0,
             })),
             Task::Lossy => Ok(Transition::Done(Evaluation {
                 outcome: FamilyOutcome::Evaluated(Outcome::Completed(int(1))),
                 location: None,
                 losses: vec![loss()],
                 frame_depth: 0,
+                peak_live_occurrences: 0,
             })),
             Task::Nested {
                 outer,
@@ -630,6 +669,7 @@ impl ChargingBody {
             location: Some(site()),
             losses: Vec::new(),
             frame_depth: 0,
+            peak_live_occurrences: 0,
         }))
     }
 }
@@ -655,6 +695,7 @@ impl Body for ChargingBody {
                     location: None,
                     losses: child.losses,
                     frame_depth: 0,
+                    peak_live_occurrences: 0,
                 },
                 None => *child,
             })),
@@ -728,5 +769,69 @@ impl Body for YieldingBody {
             })),
             Resume::Child(child) => Ok(Transition::Done(*child)),
         }
+    }
+}
+
+/// A host body that completes with its argument and requests nothing.
+pub struct Echo;
+
+impl BodyFactory for Echo {
+    fn begin(&self) -> Box<dyn Body> {
+        Box::new(EchoBody)
+    }
+}
+
+struct EchoBody;
+
+impl Body for EchoBody {
+    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+        match input {
+            Resume::Start(arguments) => Ok(Transition::Done(Evaluation::completed(
+                arguments.into_iter().next().unwrap_or_else(|| int(0)),
+            ))),
+            Resume::Again | Resume::Child(_) => Err(fault("echo-resumed-after-start").into()),
+        }
+    }
+}
+
+/// A host body that applies `target` to 0 `times` times in sequence, then
+/// completes with `times`.
+pub struct Sequence {
+    pub target: NodeKey,
+    pub times: u64,
+}
+
+impl BodyFactory for Sequence {
+    fn begin(&self) -> Box<dyn Body> {
+        Box::new(SequenceBody {
+            target: self.target.clone(),
+            remaining: self.times,
+            times: self.times,
+        })
+    }
+}
+
+struct SequenceBody {
+    target: NodeKey,
+    remaining: u64,
+    times: u64,
+}
+
+impl Body for SequenceBody {
+    fn resume(&mut self, input: Resume, _meter: &mut Meter) -> Result<Transition, BodyFailure> {
+        if let Resume::Child(child) = input {
+            if completed_int(&child).is_none() {
+                return Ok(Transition::Done(*child));
+            }
+        }
+        if self.remaining == 0 {
+            return Ok(Transition::Done(Evaluation::completed(int(self.times))));
+        }
+        self.remaining -= 1;
+        Ok(Transition::Call(ChildRequest {
+            callee: self.target.clone(),
+            arguments: vec![int(0)],
+            site: site(),
+        }))
     }
 }

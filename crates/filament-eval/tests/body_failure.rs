@@ -5,7 +5,7 @@ mod support;
 
 use filament_eval::{
     Admission, Body, BodyFactory, BodyFailure, CallFailure, Evaluation, FamilyOutcome, Progress,
-    Registry, Resume, Transition,
+    Registry, Resume, SessionLimits, Transition,
 };
 use filament_exact::{Cancel, CancelCause, Charge, ChargePoint, Meter, Outcome, Value};
 use filament_semantic_value::catalog::{Category, InternalFault};
@@ -125,7 +125,13 @@ fn run_failure(failure: BodyFailure) -> (Result<Evaluation, CallFailure>, u64) {
     let mut registry = register(ReturnFailure(failure));
     let mut meter = meter(100);
     let result = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut meter)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut meter,
+        )
         .expect("the callable arguments are admitted")
         .run();
     (result, spent(&meter))
@@ -135,7 +141,13 @@ fn step_failure(failure: BodyFailure) -> (Result<Evaluation, CallFailure>, u64) 
     let mut registry = register(ReturnFailure(failure));
     let mut meter = meter(100);
     let session = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut meter)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut meter,
+        )
         .expect("the callable arguments are admitted");
     let mut session = session;
     let result = loop {
@@ -173,7 +185,13 @@ fn a_false_completed_value_is_not_a_body_failure_or_declaration_refusal() {
     let mut registry = register(ReturnFalse);
     let mut meter = meter(100);
     let result = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut meter)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut meter,
+        )
         .expect("the callable arguments are admitted")
         .run()
         .expect("false is a completed membership answer");

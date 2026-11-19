@@ -8,7 +8,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread;
 
 use filament_eval::{
-    Admission, CallFailure, Evaluation, FamilyOutcome, Progress, Registry, Session,
+    Admission, CallFailure, Evaluation, FamilyOutcome, Progress, Registry, Session, SessionLimits,
 };
 use filament_exact::{Cancel, CancelCause, ChargePoint, LimitKind, Outcome, Undefined};
 use support::{
@@ -88,7 +88,13 @@ fn a_hundred_thousand_deep_call_runs_on_a_small_stack_and_stops_at_its_fuel() {
             let mut registry = Registry::new(Toy::default());
             let mut measured = meter(u64::MAX);
             let done = registry
-                .begin_call(count(), vec![int(DEPTH)], &(), &mut measured)
+                .begin_call(
+                    count(),
+                    vec![int(DEPTH)],
+                    SessionLimits::default(),
+                    &(),
+                    &mut measured,
+                )
                 .expect("admitted call")
                 .run()
                 .expect("application");
@@ -98,7 +104,13 @@ fn a_hundred_thousand_deep_call_runs_on_a_small_stack_and_stops_at_its_fuel() {
 
             let mut short = meter(spend - 1);
             let denied = registry
-                .begin_call(count(), vec![int(DEPTH)], &(), &mut short)
+                .begin_call(
+                    count(),
+                    vec![int(DEPTH)],
+                    SessionLimits::default(),
+                    &(),
+                    &mut short,
+                )
                 .expect("admitted call")
                 .run()
                 .expect("a denied charge is an evaluation, not a failure");
@@ -116,7 +128,13 @@ fn a_hundred_thousand_deep_call_runs_on_a_small_stack_and_stops_at_its_fuel() {
 
             let mut exact = meter(spend);
             let again = registry
-                .begin_call(count(), vec![int(DEPTH)], &(), &mut exact)
+                .begin_call(
+                    count(),
+                    vec![int(DEPTH)],
+                    SessionLimits::default(),
+                    &(),
+                    &mut exact,
+                )
                 .expect("admitted call")
                 .run()
                 .expect("application");
@@ -138,7 +156,13 @@ fn stepping_a_mixed_chain_matches_the_synchronous_run_and_resumes_each_caller_on
 
     let mut run_meter = meter(1_000);
     let run = registry
-        .begin_call(host_a(), vec![int(n)], &(), &mut run_meter)
+        .begin_call(
+            host_a(),
+            vec![int(n)],
+            SessionLimits::default(),
+            &(),
+            &mut run_meter,
+        )
         .expect("admitted call")
         .run()
         .expect("application");
@@ -149,7 +173,13 @@ fn stepping_a_mixed_chain_matches_the_synchronous_run_and_resumes_each_caller_on
     let mut step_meter = meter(1_000);
     let (stepped, steps) = drive(
         registry
-            .begin_call(host_a(), vec![int(n)], &(), &mut step_meter)
+            .begin_call(
+                host_a(),
+                vec![int(n)],
+                SessionLimits::default(),
+                &(),
+                &mut step_meter,
+            )
             .expect("admitted call"),
     );
     let stepped = stepped.expect("application");
@@ -178,7 +208,13 @@ fn one_unit_below_the_chain_spend_stops_at_the_denied_call_and_runs_no_more_body
     let mut measured = meter(1_000);
     drop(
         registry
-            .begin_call(host_a(), vec![int(3)], &(), &mut measured)
+            .begin_call(
+                host_a(),
+                vec![int(3)],
+                SessionLimits::default(),
+                &(),
+                &mut measured,
+            )
             .expect("admitted call")
             .run()
             .expect("application"),
@@ -190,7 +226,13 @@ fn one_unit_below_the_chain_spend_stops_at_the_denied_call_and_runs_no_more_body
     let mut short = meter(w - 1);
     let (denied, _) = drive(
         registry
-            .begin_call(host_a(), vec![int(3)], &(), &mut short)
+            .begin_call(
+                host_a(),
+                vec![int(3)],
+                SessionLimits::default(),
+                &(),
+                &mut short,
+            )
             .expect("admitted call"),
     );
     let denied = denied.expect("a denied charge is an evaluation");
@@ -207,7 +249,13 @@ fn one_unit_below_the_chain_spend_stops_at_the_denied_call_and_runs_no_more_body
     let mut registry = chain(&a, &b);
     let mut fresh = meter(w);
     let ok = registry
-        .begin_call(host_a(), vec![int(3)], &(), &mut fresh)
+        .begin_call(
+            host_a(),
+            vec![int(3)],
+            SessionLimits::default(),
+            &(),
+            &mut fresh,
+        )
         .expect("admitted call")
         .run()
         .expect("application");
@@ -222,7 +270,13 @@ fn cancelling_after_a_request_is_saved_runs_no_further_charge_or_body() {
     let cancel = Cancel::new();
     let mut m = meter(1_000).with_cancel(cancel.clone());
     let session = registry
-        .begin_call(host_a(), vec![int(4)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(4)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted call");
     // Step 1 enters HOST_A (its call charge); step 2 runs its first
     // transition, which saves the request for HOST_B and charges nothing.
@@ -265,7 +319,13 @@ fn a_charge_denied_by_cancellation_is_an_incomplete_result_not_a_call_failure() 
     let mut registry = Registry::new(Toy::default());
     let (result, _) = drive(
         registry
-            .begin_call(count(), vec![int(10)], &(), &mut m)
+            .begin_call(
+                count(),
+                vec![int(10)],
+                SessionLimits::default(),
+                &(),
+                &mut m,
+            )
             .expect("admitted call"),
     );
     // The third `function.call` charge was the one cancellation denied; it is
@@ -295,7 +355,13 @@ fn a_child_undefined_outcome_propagates_through_a_direct_return_caller() {
     );
     let mut m = meter(1_000);
     let result = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted call")
         .run()
         .expect("application");
@@ -324,6 +390,7 @@ fn an_interpreted_frame_propagates_a_non_completed_child_without_a_value() {
                 argument: 0,
             },
             vec![],
+            SessionLimits::default(),
             &(),
             &mut m,
         )
@@ -360,7 +427,13 @@ fn dropping_a_suspended_session_executes_no_continuation() {
     );
     let mut m = meter(1_000);
     let session = registry
-        .begin_call(host_a(), vec![int(3)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(3)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted call");
     let session = runnable(session.step());
     let session = runnable(session.step());
@@ -405,7 +478,13 @@ fn a_charging_body_runs_each_transition_once_and_keeps_the_childs_losses() {
     let mut m = meter(1_000);
     let (result, _) = drive(
         registry
-            .begin_call(host_a(), vec![int(5)], &(), &mut m)
+            .begin_call(
+                host_a(),
+                vec![int(5)],
+                SessionLimits::default(),
+                &(),
+                &mut m,
+            )
             .expect("admitted call"),
     );
     let result = result.expect("application");
@@ -471,7 +550,13 @@ fn cancellation_observed_by_the_root_bodys_last_charge_is_an_incomplete_result()
     let mut m = meter(1_000).with_cancel(cancel.clone());
     let (result, _) = drive(
         registry
-            .begin_call(host_a(), vec![int(0)], &(), &mut m)
+            .begin_call(
+                host_a(),
+                vec![int(0)],
+                SessionLimits::default(),
+                &(),
+                &mut m,
+            )
             .expect("admitted call"),
     );
     let denied = result.expect("a denied charge is an evaluation");
@@ -503,7 +588,13 @@ fn a_body_requesting_a_callee_with_the_wrong_arity_is_an_internal_fault() {
     );
     let mut m = meter(1_000);
     let result = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("the caller's own input is admitted")
         .run();
     match result {
@@ -535,6 +626,7 @@ fn argument_applications_run_left_to_right_before_the_outer_call() {
                 right: (count(), 3),
             },
             vec![],
+            SessionLimits::default(),
             &(),
             &mut m,
         )
@@ -574,7 +666,13 @@ fn a_child_refusal_and_a_child_loss_survive_a_direct_return_caller() {
         );
         let mut m = meter(1_000);
         let result = registry
-            .begin_call(host_a(), vec![int(1)], &(), &mut m)
+            .begin_call(
+                host_a(),
+                vec![int(1)],
+                SessionLimits::default(),
+                &(),
+                &mut m,
+            )
             .expect("admitted call")
             .run()
             .expect("application");
@@ -608,7 +706,13 @@ fn a_body_requesting_a_callee_that_is_not_admitted_is_an_internal_fault() {
     );
     let mut m = meter(1_000);
     let result = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("the caller's own input is admitted")
         .run();
     match result {
@@ -644,6 +748,7 @@ fn run_bad_request(
         .begin_call(
             host_a(),
             vec![arguments.first().cloned().unwrap_or_else(|| int(0))],
+            SessionLimits::default(),
             &(),
             &mut m,
         )
@@ -696,7 +801,13 @@ fn invalid_child_requests_fault_and_a_valid_one_is_applied() {
     );
     let mut m = meter(1_000);
     let result = registry
-        .begin_call(host_a(), vec![int(1)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(1)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted")
         .run();
     assert!(matches!(result, Err(CallFailure::Fault(_))));
@@ -733,7 +844,13 @@ fn a_chargeless_transition_runs_after_a_cancellation_and_the_next_charge_ends_th
     let cancel = Cancel::new();
     let mut m = meter(1_000).with_cancel(cancel.clone());
     let session = registry
-        .begin_call(host_a(), vec![int(2)], &(), &mut m)
+        .begin_call(
+            host_a(),
+            vec![int(2)],
+            SessionLimits::default(),
+            &(),
+            &mut m,
+        )
         .expect("admitted call");
     // Enter the host (its call charge), then its first transition (a yield).
     let session = runnable(session.step());

@@ -24,8 +24,8 @@ construct = []
 test-support = []
 
 [dependencies]
-filament-semantic-value = { git = "https://github.com/agent-ix/filament-semantic-value", rev = "fa5e78aa71fcea5418492b67f13a33124af84459", default-features = false }
-filament-exact = { git = "https://github.com/agent-ix/filament-exact", rev = "b26a8e4c592503fccdc4a0e3d2cce23dd8487616", default-features = false }
+filament-semantic-value = { git = "https://github.com/agent-ix/filament-semantic-value", rev = "31d807ccb8ffd5a88beb0b1a570b80acb099f5e9", default-features = false }
+filament-exact = { git = "https://github.com/agent-ix/filament-exact", rev = "a58474cc105a86f3307a11def3fc001e2459679f", default-features = false }
 filament-walk = { git = "https://github.com/agent-ix/filament-walk", tag = "v0.1.1", default-features = false }
 quire-canonical = { git = "https://github.com/agent-ix/quire-canonical", tag = "v0.3.1", default-features = false }
 serde = { version = "1.0.228", default-features = false, features = ["derive", "alloc"] }

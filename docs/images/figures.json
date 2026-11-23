@@ -4,8 +4,8 @@
     "session": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"pub struct (Session)<"},
     "step": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"pub fn (step)\\(mut self\\)"},
     "progress": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"pub enum (Progress)<"},
-    "runnable": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"^\\s+(Runnable)\\(Session"},
-    "terminal": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"^\\s+(Terminal)\\(Result"},
+    "runnable": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"(Runnable)\\(Session"},
+    "terminal": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"(Terminal)\\(Result"},
     "closure": {"from":"regex","path":"crates/filament-eval/src/closure.rs","pattern":"pub trait (CheckedClosure)"},
     "evaluation": {"from":"regex","path":"crates/filament-eval/src/result.rs","pattern":"pub struct (Evaluation)"},
     "failure": {"from":"regex","path":"crates/filament-eval/src/result.rs","pattern":"pub enum (CallFailure)"}

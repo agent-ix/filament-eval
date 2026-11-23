@@ -1,13 +1,24 @@
 {
+  "data": {
+    "registry": {"from":"regex","path":"crates/filament-eval/src/registry.rs","pattern":"pub struct (Registry)<C>"},
+    "session": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"pub struct (Session)<"},
+    "step": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"pub fn (step)\\(mut self\\)"},
+    "progress": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"pub enum (Progress)<"},
+    "runnable": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"^\\s+(Runnable)\\(Session"},
+    "terminal": {"from":"regex","path":"crates/filament-eval/src/session.rs","pattern":"^\\s+(Terminal)\\(Result"},
+    "closure": {"from":"regex","path":"crates/filament-eval/src/closure.rs","pattern":"pub trait (CheckedClosure)"},
+    "evaluation": {"from":"regex","path":"crates/filament-eval/src/result.rs","pattern":"pub struct (Evaluation)"},
+    "failure": {"from":"regex","path":"crates/filament-eval/src/result.rs","pattern":"pub enum (CallFailure)"}
+  },
   "figures": [
     {
       "id": "hero",
       "width": 980, "height": 300,
-      "label": "A Session steps a CheckedClosure one transition at a time. The Registry supplies the resumable host bodies and the closure advances interpreted code. Frames sit on one heap task stack, each step charges a Meter, and a step returns Runnable or a Terminal result.",
+      "label": "A {session} steps a {closure} one transition at a time. The {registry} supplies the resumable host bodies and the closure advances interpreted code. Frames sit on one heap task stack, each step charges a Meter, and a step returns {runnable} or a {terminal} result.",
       "items": [
-        {"k":"box","at":[0,30,200,56],"role":"logic","title":"Registry","subs":["resumable host bodies"]},
-        {"k":"box","at":[0,150,200,56],"role":"model","title":"CheckedClosure","subs":["interpreted callables"]},
-        {"k":"box","at":[300,90,200,68],"role":"logic","title":"Session","subs":["step() · one transition","owns the task stack"]},
+        {"k":"box","at":[0,30,200,56],"role":"logic","title":"{registry}","subs":["resumable host bodies"]},
+        {"k":"box","at":[0,150,200,56],"role":"model","title":"{closure}","subs":["interpreted callables"]},
+        {"k":"box","at":[300,90,200,68],"role":"logic","title":"{session}","subs":["{step}() · one transition","owns the task stack"]},
         {"k":"line","points":[[200,58],[270,58],[270,112],[297,112]],"role":"logic"},
         {"k":"line","points":[[200,178],[270,178],[270,136],[297,136]],"role":"model"},
         {"k":"note","at":[206,50],"text":"bodies","role":"muted"},
@@ -20,9 +31,9 @@
         {"k":"box","at":[300,230,200,56],"role":"ink","title":"Meter","subs":["work_units fuel"]},
         {"k":"line","points":[[400,158],[400,227]],"role":"logic"},
         {"k":"note","at":[412,198],"text":"charges","role":"muted"},
-        {"k":"box","at":[600,200,190,56],"role":"evidence","title":"Progress","subs":["Runnable · Terminal"]},
+        {"k":"box","at":[600,200,190,56],"role":"evidence","title":"{progress}","subs":["{runnable} · {terminal}"]},
         {"k":"line","points":[[500,146],[550,146],[550,228],[597,228]],"role":"logic"},
-        {"k":"box","at":[830,200,150,56],"role":"evidence","title":"Evaluation","subs":["or CallFailure"]},
+        {"k":"box","at":[830,200,150,56],"role":"evidence","title":"{evaluation}","subs":["or {failure}"]},
         {"k":"line","points":[[790,228],[827,228]],"role":"evidence"},
         {"k":"note","at":[600,282],"text":"Runnable: step again","role":"muted"}
       ]

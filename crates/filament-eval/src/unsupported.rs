@@ -103,6 +103,7 @@ const fn value_type_name(value_type: &ValueType) -> &'static str {
         ValueType::BoundedQuantity(_) => "BoundedQuantity",
         ValueType::Reference(_) => "Reference",
         ValueType::Population(_) => "Population",
+        ValueType::ClockReference => "ClockReference",
     }
 }
 

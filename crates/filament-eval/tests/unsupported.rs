@@ -82,6 +82,7 @@ fn a_value_type_and_an_operation_construct_name_their_kind() {
     for (value_type, name) in [
         (ValueType::Bytes, "Bytes"),
         (ValueType::JsonObject, "JsonObject"),
+        (ValueType::ClockReference, "ClockReference"),
     ] {
         let entry = untranslatable(UntranslatableConstruct::ValueType(Box::new(value_type)));
         assert_eq!(entry.payload().construct_name.as_deref(), Some(name));

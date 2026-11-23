@@ -40,3 +40,19 @@ clean:
 	$(CARGO) clean
 
 ci: fmt-check lint test build-no-std deny docs
+
+# =============================================================================
+# Documentation figures
+# =============================================================================
+# docs/images/figures.json defines the figures; ixd-figures (agent-ix/ix-diagrams) renders them.
+# Install it with: cargo install --git https://github.com/agent-ix/ix-diagrams ixd-figures
+
+IXD_FIGURES ?= ixd-figures
+
+.PHONY: figures
+figures:
+	$(IXD_FIGURES) generate --definitions docs/images/figures.json
+
+.PHONY: figures-check
+figures-check:
+	$(IXD_FIGURES) check --definitions docs/images/figures.json

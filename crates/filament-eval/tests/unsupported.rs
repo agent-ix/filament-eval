@@ -28,7 +28,6 @@ fn untranslatable(construct: UntranslatableConstruct) -> UnsupportedEntry {
     }
 }
 
-/// Trace: FR-401-AC-11.
 #[test]
 fn unsupported_entry_arms_are_public_catalogued_failures() {
     let expression = untranslatable(UntranslatableConstruct::ExpressionForm(String::from("let")));

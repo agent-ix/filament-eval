@@ -2,8 +2,8 @@
 //! The unsupported-entry and prepare-limit arms of `CallFailure` (FR-007).
 
 use filament_eval::{
-    CallFailure, ExecutionBackendChoice, PrepareLimitReached, PrepareSetting, UnsupportedCause,
-    UnsupportedEntry, UntranslatableConstruct,
+    CallFailure, EnvironmentRefusal, ExecutionBackendChoice, PrepareLimitReached, PrepareSetting,
+    UnsupportedCause, UnsupportedEntry, UntranslatableConstruct,
 };
 use filament_exact::{DecimalType, Integer, NodeKey, PathSegment, RoundingMode, ValueType};
 use filament_semantic_value::catalog::Category;
@@ -33,6 +33,35 @@ fn not_supplied() -> UnsupportedEntry {
         backend: ExecutionBackendChoice::Jit,
         cause: UnsupportedCause::NotSupplied,
     }
+}
+
+/// Provenance: QSL-3128 (FR-294, FR-560).
+#[test]
+fn an_environment_refusal_is_a_named_unsupported_cause_without_expression_location() {
+    let entry = UnsupportedEntry {
+        backend: ExecutionBackendChoice::Jit,
+        cause: UnsupportedCause::EnvironmentRefused(EnvironmentRefusal::ExecutableMemoryRefused),
+    };
+
+    assert_eq!(entry.catalog_code().code(), "unimplemented_capability");
+    assert_eq!(entry.catalog_code().cause(), "environment-refused");
+    assert_eq!(
+        entry.cause,
+        UnsupportedCause::EnvironmentRefused(EnvironmentRefusal::ExecutableMemoryRefused)
+    );
+    assert_eq!(
+        CallFailure::from(entry.clone()),
+        CallFailure::Unsupported(entry.clone())
+    );
+    assert_eq!(
+        CallFailure::Unsupported(entry.clone()).category(),
+        Category::Unsupported
+    );
+    let payload = entry.payload();
+    assert_eq!(payload.backend, "jit");
+    assert_eq!(payload.construct, None);
+    assert_eq!(payload.construct_name, None);
+    assert_eq!(payload.location, None);
 }
 
 /// Trace: FR-007-AC-1.

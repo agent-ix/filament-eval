@@ -15,6 +15,8 @@ const CODE: &str = "unimplemented_capability";
 const CAUSE_NOT_SUPPLIED: &str = "backend-not-supplied";
 /// QSpec FR-272's cause when the backend cannot translate a construct.
 const CAUSE_UNTRANSLATABLE: &str = "untranslatable-entry";
+/// QSpec FR-294's cause when the host refuses a resource a backend requires.
+const CAUSE_ENVIRONMENT_REFUSED: &str = "environment-refused";
 
 /// The execution backend a request chose (FR-296).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -77,6 +79,13 @@ impl UntranslatableConstruct {
     }
 }
 
+/// A host resource refusal that prevents preparing every entry for a backend.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EnvironmentRefusal {
+    /// The operating system refused executable memory for generated code.
+    ExecutableMemoryRefused,
+}
+
 /// The canonical name of a value type's kind. The match has no wildcard, so a
 /// new kernel type fails to compile here until it is named.
 const fn value_type_name(value_type: &ValueType) -> &'static str {
@@ -120,6 +129,8 @@ pub enum UnsupportedCause {
         /// The construct's location.
         location: ExpressionLocation,
     },
+    /// A host resource required by the backend was refused.
+    EnvironmentRefused(EnvironmentRefusal),
 }
 
 /// An entry the chosen execution backend cannot run (FR-294, FR-296): the
@@ -135,22 +146,22 @@ pub struct UnsupportedEntry {
 
 /// The payload keys of an unsupported entry's diagnostic (FR-286): `backend`,
 /// and for an untranslatable entry `construct`, `construct_name` and
-/// `location`.
+/// `location`. An environment refusal has no expression construct or location.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UnsupportedPayload<'a> {
     /// The `backend` key: the backend's lower-case name.
     pub backend: &'static str,
-    /// The `construct` key; `None` for a backend that was not supplied.
+    /// The `construct` key; `None` when the cause does not name an expression.
     pub construct: Option<&'static str>,
-    /// The `construct_name` key; `None` for a backend that was not supplied.
+    /// The `construct_name` key; `None` when the cause does not name an expression.
     pub construct_name: Option<String>,
-    /// The `location` key; `None` for a backend that was not supplied.
+    /// The `location` key; `None` when the cause does not name an expression.
     pub location: Option<&'a ExpressionLocation>,
 }
 
 impl UnsupportedEntry {
     /// The catalog code: `unimplemented_capability` with QSpec FR-272's
-    /// cause, `backend-not-supplied` or `untranslatable-entry`.
+    /// causes or `environment-refused` for a host resource refusal.
     #[must_use]
     pub const fn catalog_code(&self) -> CatalogCode {
         CatalogCode::new(
@@ -158,6 +169,7 @@ impl UnsupportedEntry {
             match self.cause {
                 UnsupportedCause::NotSupplied => CAUSE_NOT_SUPPLIED,
                 UnsupportedCause::Untranslatable { .. } => CAUSE_UNTRANSLATABLE,
+                UnsupportedCause::EnvironmentRefused(_) => CAUSE_ENVIRONMENT_REFUSED,
             },
         )
     }
@@ -181,6 +193,12 @@ impl UnsupportedEntry {
                 construct: Some(construct.kind()),
                 construct_name: Some(construct.name()),
                 location: Some(location),
+            },
+            UnsupportedCause::EnvironmentRefused(_) => UnsupportedPayload {
+                backend,
+                construct: None,
+                construct_name: None,
+                location: None,
             },
         }
     }

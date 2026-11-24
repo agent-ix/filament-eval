@@ -25,13 +25,17 @@ returns either arm; only a non-interpreter backend and FSL's `execute` do.
 ## Behavior
 
 1. `UnsupportedEntry { backend, cause }` SHALL name an `ExecutionBackendChoice`
-   (`Interpreter`, `Aot` or `Jit`) and an `UnsupportedCause`: `NotSupplied`, or
+   (`Interpreter`, `Aot` or `Jit`) and an `UnsupportedCause`: `NotSupplied`,
    `Untranslatable { construct, location }` with an `UntranslatableConstruct`
    (`ExpressionForm(name)`, `ValueType(Box<ValueType>)` or `Operation(NodeKey)`) and
-   an `ExpressionLocation`. `CallFailure::category` SHALL return
-   `Category::Unsupported` for the arm, and its catalog code SHALL be
-   `unimplemented_capability` with the cause `backend-not-supplied` for
-   `NotSupplied` and `untranslatable-entry` for `Untranslatable`.
+   an `ExpressionLocation`, or `EnvironmentRefused(EnvironmentRefusal)` naming
+   the refused resource. `EnvironmentRefusal::ExecutableMemoryRefused` names an
+   operating-system refusal to provide executable memory required by the JIT.
+   For `EnvironmentRefused`, the entry SHALL have no expression construct or
+   location. `CallFailure::category` SHALL return `Category::Unsupported` for
+   the arm, and its catalog code SHALL be `unimplemented_capability` with the
+   cause `backend-not-supplied` for `NotSupplied`, `untranslatable-entry` for
+   `Untranslatable`, or `environment-refused` for `EnvironmentRefused`.
 2. The diagnostic payload SHALL carry `backend`, the backend's lower-case name,
    and for `Untranslatable` also `construct` (`expression-form`, `value-type` or
    `operation`), `construct_name` (the form name, the value type's canonical
@@ -49,8 +53,8 @@ All payloads are `Clone`, `Eq` and `PartialEq`, like `CallFailure`.
 
 | ID | Criteria | Verification |
 | --- | --- | --- |
-| FR-007-AC-1 | `CallFailure::Unsupported` over each of `NotSupplied` and `Untranslatable` has category `Category::Unsupported` and catalog code `unimplemented_capability`, and converts from its `UnsupportedEntry`. | Test |
-| FR-007-AC-2 | An `UnsupportedEntry`'s catalog cause is `untranslatable-entry` or `backend-not-supplied`; its payload names the `backend` and, for `Untranslatable`, the `construct` kind, `construct_name` and `location` of an expression form, a value type (`Decimal`) and an operation node key, and carries none of them for `NotSupplied`. | Test |
+| FR-007-AC-1 | `CallFailure::Unsupported` over each of `NotSupplied`, `Untranslatable` and `EnvironmentRefused(ExecutableMemoryRefused)` has category `Category::Unsupported` and catalog code `unimplemented_capability`, and converts from its `UnsupportedEntry`. | Test |
+| FR-007-AC-2 | An `UnsupportedEntry`'s catalog cause is `untranslatable-entry`, `backend-not-supplied` or `environment-refused`; its payload names the `backend` and, for `Untranslatable`, the `construct` kind, `construct_name` and `location` of an expression form, a value type (`Decimal`) and an operation node key, and carries none of them for `NotSupplied` or `EnvironmentRefused(ExecutableMemoryRefused)`. The latter cause names `ExecutableMemoryRefused`. | Test |
 | FR-007-AC-3 | `CallFailure::Limit` has category `Category::Incomplete` and catalog code `stage_limit_exceeded`, holds the setting, bound and actual unchanged, and `PrepareSetting::name()` is `prepare.compile_work_units` or `prepare.code_bytes`. | Test |
 
 ## Dependencies

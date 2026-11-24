@@ -46,14 +46,14 @@ mod tests {
     use filament_exact::Integer;
     use ix_trace_rs::trace;
 
-    #[trace("TC-1231", "FR-091-AC-78")]
+    #[trace("TC-280", "FR-322-AC-103")]
     #[test]
     fn bytes_length_counts_octets_including_the_empty_sequence() {
         assert_eq!(length(&[]), Integer::from(0_u64));
         assert_eq!(length(&[0xde, 0xad, 0xbe, 0xef]), Integer::from(4_u64));
     }
 
-    #[trace("TC-1231", "FR-091-AC-78")]
+    #[trace("TC-280", "FR-322-AC-103")]
     #[test]
     fn bytes_concat_is_left_to_right_associative_and_has_empty_identity() {
         let first = [0x00];

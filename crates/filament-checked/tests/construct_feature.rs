@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+//! FR-400-AC-4's default-feature constructor boundary.
 
 use ix_trace_rs::trace;
 

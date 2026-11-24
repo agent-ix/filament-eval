@@ -65,6 +65,6 @@ pub use result::{
 pub use session::{Progress, Session, SessionLimits, DEFAULT_LIVE_OCCURRENCES};
 pub use signature::Signature;
 pub use unsupported::{
-    ExecutionBackendChoice, UnsupportedCause, UnsupportedEntry, UnsupportedPayload,
-    UntranslatableConstruct,
+    EnvironmentRefusal, ExecutionBackendChoice, UnsupportedCause, UnsupportedEntry,
+    UnsupportedPayload, UntranslatableConstruct,
 };

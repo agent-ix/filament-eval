@@ -584,6 +584,10 @@ pub enum NodeKind<Child = NodeId, Literal = CheckedLiteral> {
     Size(Child),
     /// Test collection membership.
     Contains(Child, Child),
+    /// Read the number of octets in a `Bytes` value.
+    BytesLength(Child),
+    /// Concatenate two `Bytes` values, left operand first.
+    BytesConcat(Child, Child),
     /// Remove the first occurrence of a sequence or ordered set.
     DropFirst(Child),
     /// Remove the first matching occurrence, scanning as collection membership.
@@ -1052,6 +1056,8 @@ impl<Child, Literal> NodeKind<Child, Literal> {
             }
             K::Size(value) => K::Size(child(value)),
             K::Contains(left, right) => K::Contains(child(left), child(right)),
+            K::BytesLength(value) => K::BytesLength(child(value)),
+            K::BytesConcat(left, right) => K::BytesConcat(child(left), child(right)),
             K::DropFirst(source) => K::DropFirst(child(source)),
             K::RemoveOne(source, value) => K::RemoveOne(child(source), child(value)),
             K::AllInstances { population } => K::AllInstances {

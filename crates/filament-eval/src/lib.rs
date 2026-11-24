@@ -35,6 +35,7 @@
 extern crate alloc;
 
 mod body;
+pub mod bytes;
 mod cause;
 mod closure;
 pub mod collection;

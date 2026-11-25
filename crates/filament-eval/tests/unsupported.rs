@@ -28,6 +28,52 @@ fn untranslatable(construct: UntranslatableConstruct) -> UnsupportedEntry {
     }
 }
 
+#[test]
+fn unsupported_entry_arms_are_public_catalogued_failures() {
+    let expression = untranslatable(UntranslatableConstruct::ExpressionForm(String::from("let")));
+    let not_supplied = not_supplied();
+
+    let expression_payload = expression.payload();
+    assert_eq!(expression_payload.backend, "jit");
+    assert_eq!(expression_payload.construct, Some("expression-form"));
+    assert_eq!(expression_payload.construct_name.as_deref(), Some("let"));
+    assert_eq!(expression_payload.location, Some(&location()));
+
+    let absent_payload = not_supplied.payload();
+    assert_eq!(absent_payload.construct, None);
+    assert_eq!(absent_payload.location, None);
+
+    for entry in [expression, not_supplied] {
+        let failure = CallFailure::Unsupported(entry.clone());
+        assert_eq!(failure.category(), Category::Unsupported);
+        assert_eq!(entry.catalog_code().code(), "unimplemented_capability");
+        assert_eq!(CallFailure::from(entry), failure);
+    }
+
+    let decimal = DecimalType::new(
+        Integer::from(0_i64),
+        Integer::from(9_i64),
+        0,
+        2,
+        RoundingMode::Exact,
+    )
+    .expect("valid decimal type");
+    let decimal = untranslatable(UntranslatableConstruct::ValueType(Box::new(
+        ValueType::Decimal(decimal),
+    )));
+    assert_eq!(decimal.payload().construct, Some("value-type"));
+    assert_eq!(decimal.payload().construct_name.as_deref(), Some("Decimal"));
+
+    let key = node_key();
+    let operation = untranslatable(UntranslatableConstruct::Operation(key.clone()));
+    let key_name = key.to_string();
+    assert_eq!(operation.payload().construct, Some("operation"));
+    assert_eq!(
+        operation.payload().construct_name.as_deref(),
+        Some(key_name.as_str())
+    );
+}
+
 fn not_supplied() -> UnsupportedEntry {
     UnsupportedEntry {
         backend: ExecutionBackendChoice::Jit,

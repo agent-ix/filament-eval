@@ -7,6 +7,9 @@ use std::fs;
 use std::path::Path;
 
 use ix_trace_rs::trace;
+use syn::punctuated::Punctuated;
+use syn::visit::Visit;
+use syn::{Meta, Token};
 
 const PACKAGE_MANIFEST: &str = include_str!("../Cargo.toml");
 const WORKSPACE_MANIFEST: &str = include_str!("../../../Cargo.toml");
@@ -52,19 +55,18 @@ fn evaluation_leaf_manifest_and_root_keep_the_no_std_boundary() {
         "filament-eval manifests must not name an FSL crate"
     );
 
-    let mut sources = String::new();
+    let mut sources = Vec::new();
     append_rust_sources(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
         &mut sources,
     );
-    let sources = strip_rust_comments_and_literals(&sources);
     for (dependency, item_prefix) in [
-        ("filament-exact", "filament_exact::"),
-        ("filament-semantic-value", "filament_semantic_value::"),
-        ("thiserror", "thiserror::"),
+        ("filament-exact", "filament_exact"),
+        ("filament-semantic-value", "filament_semantic_value"),
+        ("thiserror", "thiserror"),
     ] {
         assert!(
-            sources.contains(item_prefix),
+            source_uses_dependency_item(&sources, item_prefix),
             "normal dependency {dependency} must provide an item named by source"
         );
     }
@@ -112,10 +114,9 @@ fn normal_dependency_entries(manifest: &str) -> Vec<NormalDependency> {
                 let (name, declaration) = line
                     .split_once('=')
                     .expect("dependency table entries have a key and declaration");
-                let declaration = strip_toml_comment(declaration).trim();
                 entries.push(NormalDependency {
                     name: unquote(name.trim()).to_owned(),
-                    default_features_disabled: declaration.contains("default-features = false"),
+                    default_features_disabled: inline_default_features_disabled(declaration),
                 });
             }
             DependencyTable::Nested(_) => {
@@ -193,10 +194,61 @@ fn strip_toml_comment(line: &str) -> &str {
     line
 }
 
+fn inline_default_features_disabled(declaration: &str) -> bool {
+    let declaration = strip_toml_comment(declaration).trim();
+    let Some(fields) = declaration
+        .strip_prefix('{')
+        .and_then(|table| table.strip_suffix('}'))
+    else {
+        return false;
+    };
+
+    split_inline_table_fields(fields).into_iter().any(|field| {
+        field
+            .split_once('=')
+            .is_some_and(|(key, value)| key.trim() == "default-features" && value.trim() == "false")
+    })
+}
+
+fn split_inline_table_fields(fields: &str) -> Vec<&str> {
+    let mut result = Vec::new();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut nesting = 0_usize;
+    let mut start = 0;
+
+    for (index, character) in fields.char_indices() {
+        if let Some(delimiter) = quote {
+            if delimiter == '"' && escaped {
+                escaped = false;
+            } else if delimiter == '"' && character == '\\' {
+                escaped = true;
+            } else if character == delimiter {
+                quote = None;
+            }
+        } else {
+            match character {
+                '"' | '\'' => quote = Some(character),
+                '[' | '{' => nesting += 1,
+                ']' | '}' => nesting = nesting.saturating_sub(1),
+                ',' if nesting == 0 => {
+                    result.push(fields[start..index].trim());
+                    start = index + character.len_utf8();
+                }
+                _ => {}
+            }
+        }
+    }
+    result.push(fields[start..].trim());
+    result
+}
+
 #[test]
 fn target_specific_normal_dependencies_are_included_in_the_manifest_scan() {
-    let manifest = "[dependencies]\ninline-crate = { version = \"1\", marker = \"value#part\", default-features = true } # default-features = false\n\
+    let manifest = "[dependencies]\ninline-crate = { version = \"1\", path = \"default-features = false\", marker = \"value#part\" } # default-features = false\n\
+        inline-off = { version = \"1\", default-features = false }\n\
         [dependencies.filament-exact]\nversion = \"1\"\ndefault-features = false\n\
+        [dependencies.path-nested]\nversion = \"1\"\npath = \"default-features = false\"\n\
         [target.'cfg(target_arch = \"arm\")'.dependencies]\n\
         filament-semantic-value = { version = \"1\", default-features = false }\n\
         [target.'cfg(target_arch = \"arm\")'.dependencies.fsl-forbidden]\n\
@@ -216,157 +268,132 @@ fn target_specific_normal_dependencies_are_included_in_the_manifest_scan() {
             "filament-semantic-value",
             "fsl-forbidden",
             "inline-crate",
+            "inline-off",
+            "path-nested",
         ])
     );
     assert!(dependencies
         .iter()
-        .filter(|dependency| dependency.name != "inline-crate")
+        .filter(|dependency| {
+            !matches!(dependency.name.as_str(), "inline-crate" | "path-nested")
+        })
         .all(|dependency| dependency.default_features_disabled));
     assert!(dependencies
         .iter()
         .find(|dependency| dependency.name == "inline-crate")
         .is_some_and(|dependency| !dependency.default_features_disabled));
+    assert!(dependencies
+        .iter()
+        .find(|dependency| dependency.name == "path-nested")
+        .is_some_and(|dependency| !dependency.default_features_disabled));
 }
 
 #[test]
-fn rust_dependency_scan_ignores_line_nested_block_and_string_comments() {
-    let source = r#"
+fn rust_dependency_scan_ignores_comments_literals_and_local_names() {
+    let false_source = r#"
         // filament_exact::LineComment
         /* filament_semantic_value::Outer /* thiserror::Nested */ */
         const URL: &str = "filament_exact::StringLiteral";
-        use filament_exact::ActualItem;
+        mod filament_exact {
+            pub struct LocalItem;
+        }
+        use filament_exact::LocalItem;
     "#;
-    let stripped = strip_rust_comments_and_literals(source);
+    let actual_source = "use filament_exact::ActualItem;";
 
-    assert!(stripped.contains("filament_exact::ActualItem"));
-    assert!(!stripped.contains("filament_exact::LineComment"));
-    assert!(!stripped.contains("filament_semantic_value::Outer"));
-    assert!(!stripped.contains("thiserror::Nested"));
-    assert!(!stripped.contains("filament_exact::StringLiteral"));
+    assert!(!source_uses_dependency_item(
+        &[false_source.to_owned()],
+        "filament_exact"
+    ));
+    assert!(source_uses_dependency_item(
+        &[actual_source.to_owned()],
+        "filament_exact"
+    ));
 }
 
-fn append_rust_sources(directory: &Path, sources: &mut String) {
+fn append_rust_sources(directory: &Path, sources: &mut Vec<String>) {
     for entry in fs::read_dir(directory).expect("read filament-eval source directory") {
         let path = entry.expect("read filament-eval source entry").path();
         if path.is_dir() {
             append_rust_sources(&path, sources);
         } else if path.extension().is_some_and(|extension| extension == "rs") {
-            sources.push_str(&fs::read_to_string(path).expect("read filament-eval Rust source"));
+            sources.push(fs::read_to_string(path).expect("read filament-eval Rust source"));
         }
     }
 }
 
-fn strip_rust_comments_and_literals(source: &str) -> String {
-    let bytes = source.as_bytes();
-    let mut stripped = Vec::with_capacity(bytes.len());
-    let mut index = 0;
+struct DependencyPathVisitor<'a> {
+    dependency: &'a str,
+    path_found: bool,
+    local_module_found: bool,
+}
 
-    while index < bytes.len() {
-        if let Some(end) = raw_string_end(bytes, index) {
-            stripped.push(b' ');
-            index = end;
-        } else if bytes[index..].starts_with(b"//") {
-            index += 2;
-            while index < bytes.len() && bytes[index] != b'\n' {
-                index += 1;
+impl<'ast> Visit<'ast> for DependencyPathVisitor<'_> {
+    fn visit_use_path(&mut self, path: &'ast syn::UsePath) {
+        if path.ident == self.dependency {
+            self.path_found = true;
+        }
+        syn::visit::visit_use_path(self, path);
+    }
+
+    fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
+        if let Meta::List(list) = &attribute.meta {
+            if list.path.is_ident("derive") {
+                if let Ok(DerivePaths(derives)) = syn::parse2(list.tokens.clone()) {
+                    if derives.iter().any(|path| {
+                        path.segments
+                            .first()
+                            .is_some_and(|segment| segment.ident == self.dependency)
+                    }) {
+                        self.path_found = true;
+                    }
+                }
             }
-        } else if bytes[index..].starts_with(b"/*") {
-            index = skip_block_comment(bytes, index);
-            stripped.push(b' ');
-        } else if bytes[index] == b'"' {
-            index = skip_quoted(bytes, index, b'"');
-            stripped.push(b' ');
-        } else if bytes[index] == b'\'' && char_literal_end(bytes, index).is_some() {
-            index = char_literal_end(bytes, index).expect("checked character literal");
-            stripped.push(b' ');
-        } else {
-            stripped.push(bytes[index]);
-            index += 1;
         }
+        syn::visit::visit_attribute(self, attribute);
     }
 
-    String::from_utf8(stripped).expect("comment stripping preserves UTF-8")
-}
-
-fn raw_string_end(bytes: &[u8], start: usize) -> Option<usize> {
-    let raw_start = if bytes[start..].starts_with(b"br") {
-        start + 1
-    } else if bytes[start..].starts_with(b"r") {
-        start
-    } else {
-        return None;
-    };
-    let mut quote = raw_start + 1;
-    while quote < bytes.len() && bytes[quote] == b'#' {
-        quote += 1;
-    }
-    if quote >= bytes.len() || bytes[quote] != b'"' {
-        return None;
-    }
-    let hashes = quote - raw_start - 1;
-    let mut cursor = quote + 1;
-    while cursor < bytes.len() {
-        if bytes[cursor] == b'"'
-            && bytes
-                .get(cursor + 1..cursor + 1 + hashes)
-                .is_some_and(|suffix| suffix.iter().all(|byte| *byte == b'#'))
+    fn visit_path(&mut self, path: &'ast syn::Path) {
+        if path.segments.len() > 1
+            && path
+                .segments
+                .first()
+                .is_some_and(|segment| segment.ident == self.dependency)
         {
-            return Some(cursor + 1 + hashes);
+            self.path_found = true;
         }
-        cursor += 1;
+        syn::visit::visit_path(self, path);
     }
-    Some(bytes.len())
+
+    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+        if item.ident == self.dependency {
+            self.local_module_found = true;
+        }
+        syn::visit::visit_item_mod(self, item);
+    }
 }
 
-fn skip_block_comment(bytes: &[u8], start: usize) -> usize {
-    let mut depth = 1_usize;
-    let mut cursor = start + 2;
-    while cursor < bytes.len() && depth > 0 {
-        if bytes[cursor..].starts_with(b"/*") {
-            depth += 1;
-            cursor += 2;
-        } else if bytes[cursor..].starts_with(b"*/") {
-            depth -= 1;
-            cursor += 2;
-        } else {
-            cursor += 1;
-        }
+struct DerivePaths(Punctuated<syn::Path, Token![,]>);
+
+impl syn::parse::Parse for DerivePaths {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        Punctuated::parse_terminated(input).map(Self)
     }
-    cursor
 }
 
-fn skip_quoted(bytes: &[u8], start: usize, delimiter: u8) -> usize {
-    let mut cursor = start + 1;
-    let mut escaped = false;
-    while cursor < bytes.len() {
-        let byte = bytes[cursor];
-        cursor += 1;
-        if escaped {
-            escaped = false;
-        } else if byte == b'\\' {
-            escaped = true;
-        } else if byte == delimiter {
-            break;
-        }
+fn source_uses_dependency_item(sources: &[String], dependency: &str) -> bool {
+    let mut path_found = false;
+    let mut local_module_found = false;
+    for source in sources {
+        let file = syn::parse_file(source).expect("parse filament-eval Rust source");
+        let mut visitor = DependencyPathVisitor {
+            dependency,
+            path_found: false,
+            local_module_found: false,
+        };
+        visitor.visit_file(&file);
+        path_found |= visitor.path_found;
+        local_module_found |= visitor.local_module_found;
     }
-    cursor
-}
-
-fn char_literal_end(bytes: &[u8], start: usize) -> Option<usize> {
-    let mut cursor = start + 1;
-    if cursor >= bytes.len() || bytes[cursor] == b'\n' {
-        return None;
-    }
-    if bytes[cursor] == b'\\' {
-        cursor += 1;
-        while cursor < bytes.len() && bytes[cursor] != b'\'' && bytes[cursor] != b'\n' {
-            cursor += 1;
-        }
-    } else {
-        cursor += 1;
-        while cursor < bytes.len() && (bytes[cursor] & 0b1100_0000) == 0b1000_0000 {
-            cursor += 1;
-        }
-    }
-    (cursor < bytes.len() && bytes[cursor] == b'\'').then_some(cursor + 1)
+    path_found && !local_module_found
 }

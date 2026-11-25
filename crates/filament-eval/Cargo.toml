@@ -20,6 +20,7 @@ thiserror = { version = "2.0.20", default-features = false }
 
 [dev-dependencies]
 ix-trace-rs = { git = "https://github.com/agent-ix/ix-trace-rs", tag = "v0.1.2" }
+syn = { version = "3.0.9", features = ["full", "visit"] }
 # The ordered charge log, to assert the exact charge sequence of a run.
 filament-exact = { git = "https://github.com/agent-ix/filament-exact", rev = "08a5a1763ef4bd1ea7d1147717c959af5a3522cc", default-features = false, features = ["test-support"] }
 

@@ -300,13 +300,19 @@ fn rust_dependency_scan_ignores_comments_literals_and_local_names() {
         use filament_exact::LocalItem;
     "#;
     let actual_source = "use filament_exact::ActualItem;";
+    let local_alias = "use local::Module as filament_exact; use filament_exact::FakeItem;";
+    let unrelated_local = "mod child { mod filament_exact {} }";
 
     assert!(!source_uses_dependency_item(
         &[false_source.to_owned()],
         "filament_exact"
     ));
+    assert!(!source_uses_dependency_item(
+        &[local_alias.to_owned()],
+        "filament_exact"
+    ));
     assert!(source_uses_dependency_item(
-        &[actual_source.to_owned()],
+        &[actual_source.to_owned(), unrelated_local.to_owned()],
         "filament_exact"
     ));
 }
@@ -325,7 +331,6 @@ fn append_rust_sources(directory: &Path, sources: &mut Vec<String>) {
 struct DependencyPathVisitor<'a> {
     dependency: &'a str,
     path_found: bool,
-    local_module_found: bool,
 }
 
 impl<'ast> Visit<'ast> for DependencyPathVisitor<'_> {
@@ -364,13 +369,6 @@ impl<'ast> Visit<'ast> for DependencyPathVisitor<'_> {
         }
         syn::visit::visit_path(self, path);
     }
-
-    fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
-        if item.ident == self.dependency {
-            self.local_module_found = true;
-        }
-        syn::visit::visit_item_mod(self, item);
-    }
 }
 
 struct DerivePaths(Punctuated<syn::Path, Token![,]>);
@@ -382,18 +380,60 @@ impl syn::parse::Parse for DerivePaths {
 }
 
 fn source_uses_dependency_item(sources: &[String], dependency: &str) -> bool {
-    let mut path_found = false;
-    let mut local_module_found = false;
-    for source in sources {
+    sources.iter().any(|source| {
         let file = syn::parse_file(source).expect("parse filament-eval Rust source");
-        let mut visitor = DependencyPathVisitor {
-            dependency,
-            path_found: false,
-            local_module_found: false,
-        };
-        visitor.visit_file(&file);
-        path_found |= visitor.path_found;
-        local_module_found |= visitor.local_module_found;
+        scope_uses_dependency_item(&file.items, dependency)
+    })
+}
+
+fn scope_uses_dependency_item(items: &[syn::Item], dependency: &str) -> bool {
+    let shadowed = items.iter().any(|item| match item {
+        syn::Item::Mod(item) => item.ident == dependency,
+        syn::Item::Use(item) => {
+            !use_tree_is_rooted_at(&item.tree, dependency)
+                && use_tree_binds_name(&item.tree, dependency, None)
+        }
+        _ => false,
+    });
+    if shadowed {
+        return false;
     }
-    path_found && !local_module_found
+
+    let mut visitor = DependencyPathVisitor {
+        dependency,
+        path_found: false,
+    };
+    for item in items {
+        if let syn::Item::Mod(module) = item {
+            if let Some((_, nested_items)) = &module.content {
+                if scope_uses_dependency_item(nested_items, dependency) {
+                    return true;
+                }
+            }
+        } else {
+            visitor.visit_item(item);
+        }
+    }
+    visitor.path_found
+}
+
+fn use_tree_is_rooted_at(tree: &syn::UseTree, dependency: &str) -> bool {
+    matches!(tree, syn::UseTree::Path(path) if path.ident == dependency)
+}
+
+fn use_tree_binds_name(tree: &syn::UseTree, dependency: &str, parent: Option<&str>) -> bool {
+    match tree {
+        syn::UseTree::Path(path) => {
+            use_tree_binds_name(&path.tree, dependency, Some(&path.ident.to_string()))
+        }
+        syn::UseTree::Name(name) => {
+            name.ident == dependency || (name.ident == "self" && parent == Some(dependency))
+        }
+        syn::UseTree::Rename(rename) => rename.rename == dependency,
+        syn::UseTree::Glob(_) => true,
+        syn::UseTree::Group(group) => group
+            .items
+            .iter()
+            .any(|item| use_tree_binds_name(item, dependency, parent)),
+    }
 }

@@ -32,14 +32,22 @@ fn checker_owned_derivation_api_is_not_public_from_filament_checked() {
         (
             "FR-400-AC-18",
             "EffectiveDeclarationPreimage",
-            &["", "key", "node"][..],
+            &["", "key", "node", "integer_division"][..],
         ),
-        ("FR-400-AC-19", "Fact", &["", "key", "node"][..]),
-        ("FR-400-AC-20", "RuleRef", &["", "key", "node"][..]),
+        (
+            "FR-400-AC-19",
+            "Fact",
+            &["", "key", "node", "integer_division"][..],
+        ),
+        (
+            "FR-400-AC-20",
+            "RuleRef",
+            &["", "key", "node", "integer_division"][..],
+        ),
         (
             "FR-400-AC-23",
             "ModelRefusalCause",
-            &["", "key", "node"][..],
+            &["", "key", "node", "integer_division"][..],
         ),
     ];
 

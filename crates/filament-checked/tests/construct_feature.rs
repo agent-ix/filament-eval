@@ -50,9 +50,15 @@ fn checker_owned_derivation_api_is_not_public_from_filament_checked() {
             } else {
                 format!("filament_checked::{module}::{item}")
             };
-            let source = format!("use {path};\nfn main() {{ let _ = {item}; }}\n");
+            let source = format!("use {path};\nfn probe(_: Option<{item}>) {{}}\n");
             let probe = format!("{criterion}-{module}");
-            assert_unavailable_from_external_crate(&probe, &source, item);
+            assert_unavailable_from_external_crate(
+                &probe,
+                &source,
+                item,
+                "E0432",
+                "unresolved import",
+            );
         }
     }
 
@@ -70,12 +76,24 @@ fn checker_owned_derivation_api_is_not_public_from_filament_checked() {
     ];
 
     for (criterion, method, source) in absent_methods {
-        assert_unavailable_from_external_crate(criterion, source, method);
+        assert_unavailable_from_external_crate(
+            criterion,
+            source,
+            method,
+            "E0599",
+            "no method named",
+        );
     }
     assert_no_model_refusal_cause_item_in_crate_source();
 }
 
-fn assert_unavailable_from_external_crate(criterion: &str, source: &str, absent_item: &str) {
+fn assert_unavailable_from_external_crate(
+    criterion: &str,
+    source: &str,
+    absent_item: &str,
+    expected_code: &str,
+    expected_message: &str,
+) {
     let test_executable = std::env::current_exe().expect("integration test executable path");
     let dependencies = test_executable
         .parent()
@@ -117,8 +135,12 @@ fn assert_unavailable_from_external_crate(criterion: &str, source: &str, absent_
         "{criterion}: {absent_item} unexpectedly compiled from an external crate"
     );
     assert!(
-        diagnostics.contains(absent_item),
-        "{criterion}: compilation failed for a reason unrelated to {absent_item}: {diagnostics}"
+        diagnostics.contains(&format!("error[{expected_code}]")),
+        "{criterion}: expected {expected_code} for {absent_item}: {diagnostics}"
+    );
+    assert!(
+        diagnostics.contains(expected_message) && diagnostics.contains(absent_item),
+        "{criterion}: expected `{expected_message}` naming {absent_item}: {diagnostics}"
     );
 }
 

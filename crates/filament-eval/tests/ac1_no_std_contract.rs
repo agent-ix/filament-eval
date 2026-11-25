@@ -28,16 +28,20 @@ fn evaluation_leaf_manifest_and_root_keep_the_no_std_boundary() {
     );
 
     let dependencies = normal_dependency_entries(PACKAGE_MANIFEST);
-    let dependency_names: BTreeSet<&str> = dependencies.iter().map(|(name, _)| *name).collect();
+    let dependency_names: BTreeSet<&str> = dependencies
+        .iter()
+        .map(|dependency| dependency.name.as_str())
+        .collect();
     assert_eq!(
         dependency_names,
         BTreeSet::from(["filament-exact", "filament-semantic-value", "thiserror"]),
         "only the leaf's directly used support crates are normal dependencies"
     );
-    for (name, declaration) in dependencies {
+    for dependency in dependencies {
         assert!(
-            declaration.contains("default-features = false"),
-            "normal dependency {name} must disable default features: {declaration}"
+            dependency.default_features_disabled,
+            "normal dependency {} must disable default features",
+            dependency.name
         );
     }
     assert!(
@@ -65,50 +69,134 @@ fn evaluation_leaf_manifest_and_root_keep_the_no_std_boundary() {
     }
 }
 
-fn normal_dependency_entries(manifest: &str) -> Vec<(&str, &str)> {
-    let mut in_table = false;
+struct NormalDependency {
+    name: String,
+    default_features_disabled: bool,
+}
+
+#[derive(Clone, Copy)]
+enum DependencyTable<'a> {
+    Other,
+    Entries,
+    Nested(&'a str),
+}
+
+fn normal_dependency_entries(manifest: &str) -> Vec<NormalDependency> {
+    let mut table = DependencyTable::Other;
     let mut entries = Vec::new();
+    let mut nested_default_features_disabled = false;
 
     for line in manifest.lines().map(str::trim) {
         if line.starts_with('[') {
-            let table = line
+            if let DependencyTable::Nested(name) = table {
+                entries.push(NormalDependency {
+                    name: name.to_owned(),
+                    default_features_disabled: nested_default_features_disabled,
+                });
+            }
+            nested_default_features_disabled = false;
+            let header = line
                 .strip_prefix('[')
-                .and_then(|table| table.strip_suffix(']'))
+                .and_then(|header| header.strip_suffix(']'))
                 .expect("TOML table header is bracketed");
-            in_table = table == "dependencies"
-                || (table.starts_with("target.") && table.ends_with(".dependencies"));
+            table = dependency_table(header);
             continue;
         }
-        if !in_table || line.is_empty() || line.starts_with('#') {
+        if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let (name, declaration) = line
-            .split_once('=')
-            .expect("dependency table entries have a key and declaration");
-        entries.push((name.trim(), declaration.trim()));
+        match table {
+            DependencyTable::Other => {}
+            DependencyTable::Entries => {
+                let (name, declaration) = line
+                    .split_once('=')
+                    .expect("dependency table entries have a key and declaration");
+                entries.push(NormalDependency {
+                    name: unquote(name.trim()).to_owned(),
+                    default_features_disabled: declaration.contains("default-features = false"),
+                });
+            }
+            DependencyTable::Nested(_) => {
+                let (key, value) = line
+                    .split_once('=')
+                    .expect("nested dependency fields have a key and value");
+                if key.trim() == "default-features" && value.trim() == "false" {
+                    nested_default_features_disabled = true;
+                }
+            }
+        }
+    }
+    if let DependencyTable::Nested(name) = table {
+        entries.push(NormalDependency {
+            name: name.to_owned(),
+            default_features_disabled: nested_default_features_disabled,
+        });
     }
 
     entries
 }
 
+fn dependency_table(header: &str) -> DependencyTable<'_> {
+    if header == "dependencies" {
+        return DependencyTable::Entries;
+    }
+    if let Some(name) = header.strip_prefix("dependencies.") {
+        return DependencyTable::Nested(unquote(name));
+    }
+    if let Some(name) = target_dependency_suffix(header) {
+        return if name.is_empty() {
+            DependencyTable::Entries
+        } else {
+            DependencyTable::Nested(unquote(name))
+        };
+    }
+    DependencyTable::Other
+}
+
+fn target_dependency_suffix(header: &str) -> Option<&str> {
+    if !header.starts_with("target.") {
+        return None;
+    }
+    let (_, suffix) = header.rsplit_once(".dependencies")?;
+    if suffix.is_empty() {
+        Some("")
+    } else {
+        suffix.strip_prefix('.')
+    }
+}
+
+fn unquote(name: &str) -> &str {
+    name.trim_matches(|character| character == '\'' || character == '"')
+}
+
 #[test]
 fn target_specific_normal_dependencies_are_included_in_the_manifest_scan() {
-    let manifest =
-        "[dependencies]\nfilament-exact = { version = \"1\", default-features = false }\n\
+    let manifest = "[dependencies]\ninline-crate = { version = \"1\", default-features = false }\n\
+        [dependencies.filament-exact]\nversion = \"1\"\ndefault-features = false\n\
         [target.'cfg(target_arch = \"arm\")'.dependencies]\n\
         filament-semantic-value = { version = \"1\", default-features = false }\n\
+        [target.'cfg(target_arch = \"arm\")'.dependencies.fsl-forbidden]\n\
+        version = \"1\"\ndefault-features = false\n\
         [dev-dependencies]\nexample = \"1\"\n";
 
     let dependencies = normal_dependency_entries(manifest);
-    let names: BTreeSet<&str> = dependencies.iter().map(|(name, _)| *name).collect();
+    let names: BTreeSet<&str> = dependencies
+        .iter()
+        .map(|dependency| dependency.name.as_str())
+        .collect();
 
     assert_eq!(
         names,
-        BTreeSet::from(["filament-exact", "filament-semantic-value"])
+        BTreeSet::from([
+            "filament-exact",
+            "filament-semantic-value",
+            "fsl-forbidden",
+            "inline-crate",
+        ])
     );
     assert!(dependencies
         .iter()
-        .all(|(_, declaration)| declaration.contains("default-features = false")));
+        .all(|dependency| dependency.default_features_disabled));
 }
 
 fn append_rust_sources(directory: &Path, sources: &mut String) {

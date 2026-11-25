@@ -31,6 +31,7 @@
 //! unsafe code. It names no item of the FSL compiler, package, model, routing
 //! or replay crates.
 #![no_std]
+#![deny(unused_crate_dependencies)]
 
 extern crate alloc;
 

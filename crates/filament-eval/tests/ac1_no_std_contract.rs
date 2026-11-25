@@ -2,6 +2,7 @@
 //! FR-401-AC-1: the evaluation leaf stays no_std and depends only on its
 //! three used, no-default-feature support crates.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
@@ -20,16 +21,17 @@ fn evaluation_leaf_manifest_and_root_keep_the_no_std_boundary() {
     );
     assert!(
         WORKSPACE_MANIFEST.contains("[workspace.lints.rust]")
-            && WORKSPACE_MANIFEST.contains("unsafe_code = \"forbid\""),
+            && WORKSPACE_MANIFEST.contains("unsafe_code = \"forbid\"")
+            && PACKAGE_MANIFEST.contains("[lints]")
+            && PACKAGE_MANIFEST.contains("workspace = true"),
         "the manifest must forbid unsafe Rust"
     );
 
-    let dependencies = table_entries(PACKAGE_MANIFEST, "dependencies");
-    let mut dependency_names: Vec<&str> = dependencies.iter().map(|(name, _)| *name).collect();
-    dependency_names.sort_unstable();
+    let dependencies = normal_dependency_entries(PACKAGE_MANIFEST);
+    let dependency_names: BTreeSet<&str> = dependencies.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         dependency_names,
-        ["filament-exact", "filament-semantic-value", "thiserror"],
+        BTreeSet::from(["filament-exact", "filament-semantic-value", "thiserror"]),
         "only the leaf's directly used support crates are normal dependencies"
     );
     for (name, declaration) in dependencies {
@@ -63,14 +65,18 @@ fn evaluation_leaf_manifest_and_root_keep_the_no_std_boundary() {
     }
 }
 
-fn table_entries<'a>(manifest: &'a str, table: &str) -> Vec<(&'a str, &'a str)> {
-    let wanted = format!("[{table}]");
+fn normal_dependency_entries(manifest: &str) -> Vec<(&str, &str)> {
     let mut in_table = false;
     let mut entries = Vec::new();
 
     for line in manifest.lines().map(str::trim) {
         if line.starts_with('[') {
-            in_table = line == wanted;
+            let table = line
+                .strip_prefix('[')
+                .and_then(|table| table.strip_suffix(']'))
+                .expect("TOML table header is bracketed");
+            in_table = table == "dependencies"
+                || (table.starts_with("target.") && table.ends_with(".dependencies"));
             continue;
         }
         if !in_table || line.is_empty() || line.starts_with('#') {
@@ -83,6 +89,26 @@ fn table_entries<'a>(manifest: &'a str, table: &str) -> Vec<(&'a str, &'a str)> 
     }
 
     entries
+}
+
+#[test]
+fn target_specific_normal_dependencies_are_included_in_the_manifest_scan() {
+    let manifest =
+        "[dependencies]\nfilament-exact = { version = \"1\", default-features = false }\n\
+        [target.'cfg(target_arch = \"arm\")'.dependencies]\n\
+        filament-semantic-value = { version = \"1\", default-features = false }\n\
+        [dev-dependencies]\nexample = \"1\"\n";
+
+    let dependencies = normal_dependency_entries(manifest);
+    let names: BTreeSet<&str> = dependencies.iter().map(|(name, _)| *name).collect();
+
+    assert_eq!(
+        names,
+        BTreeSet::from(["filament-exact", "filament-semantic-value"])
+    );
+    assert!(dependencies
+        .iter()
+        .all(|(_, declaration)| declaration.contains("default-features = false")));
 }
 
 fn append_rust_sources(directory: &Path, sources: &mut String) {

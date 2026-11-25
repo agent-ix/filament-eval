@@ -301,7 +301,10 @@ fn rust_dependency_scan_ignores_comments_literals_and_local_names() {
     "#;
     let actual_source = "use filament_exact::ActualItem;";
     let local_alias = "use local::Module as filament_exact; use filament_exact::FakeItem;";
+    let block_local_alias =
+        "fn nested() { use local::Module as filament_exact; use filament_exact::FakeItem; }";
     let unrelated_local = "mod child { mod filament_exact {} }";
+    let unrelated_glob = "use other::*; use filament_exact::ActualItem;";
 
     assert!(!source_uses_dependency_item(
         &[false_source.to_owned()],
@@ -311,8 +314,16 @@ fn rust_dependency_scan_ignores_comments_literals_and_local_names() {
         &[local_alias.to_owned()],
         "filament_exact"
     ));
+    assert!(!source_uses_dependency_item(
+        &[block_local_alias.to_owned()],
+        "filament_exact"
+    ));
     assert!(source_uses_dependency_item(
-        &[actual_source.to_owned(), unrelated_local.to_owned()],
+        &[
+            actual_source.to_owned(),
+            unrelated_local.to_owned(),
+            unrelated_glob.to_owned(),
+        ],
         "filament_exact"
     ));
 }
@@ -369,6 +380,12 @@ impl<'ast> Visit<'ast> for DependencyPathVisitor<'_> {
         }
         syn::visit::visit_path(self, path);
     }
+
+    fn visit_block(&mut self, block: &'ast syn::Block) {
+        if block_uses_dependency_item(block, self.dependency) {
+            self.path_found = true;
+        }
+    }
 }
 
 struct DerivePaths(Punctuated<syn::Path, Token![,]>);
@@ -387,15 +404,7 @@ fn source_uses_dependency_item(sources: &[String], dependency: &str) -> bool {
 }
 
 fn scope_uses_dependency_item(items: &[syn::Item], dependency: &str) -> bool {
-    let shadowed = items.iter().any(|item| match item {
-        syn::Item::Mod(item) => item.ident == dependency,
-        syn::Item::Use(item) => {
-            !use_tree_is_rooted_at(&item.tree, dependency)
-                && use_tree_binds_name(&item.tree, dependency, None)
-        }
-        _ => false,
-    });
-    if shadowed {
+    if scope_is_shadowed(items, dependency) {
         return false;
     }
 
@@ -417,6 +426,48 @@ fn scope_uses_dependency_item(items: &[syn::Item], dependency: &str) -> bool {
     visitor.path_found
 }
 
+fn block_uses_dependency_item(block: &syn::Block, dependency: &str) -> bool {
+    let shadowed = block.stmts.iter().any(|statement| match statement {
+        syn::Stmt::Item(syn::Item::Mod(item)) => item.ident == dependency,
+        syn::Stmt::Item(syn::Item::Use(item)) => {
+            !use_tree_is_rooted_at(&item.tree, dependency)
+                && use_tree_binds_name(&item.tree, dependency, None)
+        }
+        _ => false,
+    });
+    if shadowed {
+        return false;
+    }
+
+    let mut visitor = DependencyPathVisitor {
+        dependency,
+        path_found: false,
+    };
+    for statement in &block.stmts {
+        if let syn::Stmt::Item(syn::Item::Mod(module)) = statement {
+            if let Some((_, nested_items)) = &module.content {
+                if scope_uses_dependency_item(nested_items, dependency) {
+                    return true;
+                }
+            }
+        } else {
+            visitor.visit_stmt(statement);
+        }
+    }
+    visitor.path_found
+}
+
+fn scope_is_shadowed(items: &[syn::Item], dependency: &str) -> bool {
+    items.iter().any(|item| match item {
+        syn::Item::Mod(item) => item.ident == dependency,
+        syn::Item::Use(item) => {
+            !use_tree_is_rooted_at(&item.tree, dependency)
+                && use_tree_binds_name(&item.tree, dependency, None)
+        }
+        _ => false,
+    })
+}
+
 fn use_tree_is_rooted_at(tree: &syn::UseTree, dependency: &str) -> bool {
     matches!(tree, syn::UseTree::Path(path) if path.ident == dependency)
 }
@@ -430,7 +481,7 @@ fn use_tree_binds_name(tree: &syn::UseTree, dependency: &str, parent: Option<&st
             name.ident == dependency || (name.ident == "self" && parent == Some(dependency))
         }
         syn::UseTree::Rename(rename) => rename.rename == dependency,
-        syn::UseTree::Glob(_) => true,
+        syn::UseTree::Glob(_) => false,
         syn::UseTree::Group(group) => group
             .items
             .iter()

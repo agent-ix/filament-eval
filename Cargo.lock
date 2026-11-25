@@ -84,7 +84,6 @@ dependencies = [
  "filament-exact",
  "filament-semantic-value",
  "ix-trace-rs",
- "syn",
  "thiserror",
 ]
 

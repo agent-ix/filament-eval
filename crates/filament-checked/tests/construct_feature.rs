@@ -111,23 +111,21 @@ fn assert_unavailable_from_external_crate(
         })
         .expect("Cargo built filament-checked as an rlib");
 
-    let source_path = compile_fail_source_path(criterion);
-    let output_path = source_path.with_extension("output");
-    fs::write(&source_path, source).expect("write compile-fail source");
+    let probe_files = CompileFailProbeFiles::new(criterion);
+    fs::write(&probe_files.source, source).expect("write compile-fail source");
     let output = Command::new("rustc")
         .arg("--edition=2021")
         .arg("--crate-type=bin")
-        .arg(&source_path)
+        .arg(&probe_files.source)
         .arg("-L")
         .arg(format!("dependency={}", dependencies.display()))
         .arg("--extern")
         .arg(format!("filament_checked={}", checked_library.display()))
         .arg("-o")
-        .arg(&output_path)
+        .arg(&probe_files.output)
         .output()
         .expect("run rustc for public-surface probe");
-    let _ = fs::remove_file(&source_path);
-    let _ = fs::remove_file(&output_path);
+    drop(probe_files);
 
     let diagnostics = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -144,12 +142,28 @@ fn assert_unavailable_from_external_crate(
     );
 }
 
-fn compile_fail_source_path(criterion: &str) -> PathBuf {
-    let safe_criterion = criterion.replace('-', "_");
-    std::env::temp_dir().join(format!(
-        "filament_checked_{safe_criterion}_{}.rs",
-        std::process::id()
-    ))
+struct CompileFailProbeFiles {
+    source: PathBuf,
+    output: PathBuf,
+}
+
+impl CompileFailProbeFiles {
+    fn new(criterion: &str) -> Self {
+        let safe_criterion = criterion.replace('-', "_");
+        let source = std::env::temp_dir().join(format!(
+            "filament_checked_{safe_criterion}_{}.rs",
+            std::process::id()
+        ));
+        let output = source.with_extension("output");
+        Self { source, output }
+    }
+}
+
+impl Drop for CompileFailProbeFiles {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.source);
+        let _ = fs::remove_file(&self.output);
+    }
 }
 
 fn assert_no_model_refusal_cause_item_in_crate_source() {

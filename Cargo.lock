@@ -70,7 +70,6 @@ version = "0.1.6"
 dependencies = [
  "filament-exact",
  "filament-semantic-value",
- "filament-walk",
  "ix-trace-rs",
  "quire-canonical",
  "serde",
@@ -113,11 +112,6 @@ dependencies = [
  "quire-canonical",
  "thiserror",
 ]
-
-[[package]]
-name = "filament-walk"
-version = "0.1.1"
-source = "git+https://github.com/agent-ix/filament-walk?tag=v0.1.1#6b37f032708dd0a3be9fd82f595641f9574af4fe"
 
 [[package]]
 name = "generic-array"

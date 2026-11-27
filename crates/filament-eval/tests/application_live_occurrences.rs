@@ -12,9 +12,10 @@ use filament_eval::{
 use filament_exact::{Charge, ChargePoint, Incomplete, Integer, LimitKind, Meter, Outcome, Value};
 use ix_trace_rs::trace;
 use support::{
-    Toy, add, completed_int, int, live_child_three, live_child_two, live_done_three, live_done_two,
+    add, completed_int, int, live_child_three, live_child_two, live_done_three, live_done_two,
     meter, native_carry_call, native_chain, native_nested_fit, native_nested_over,
     native_peak_then_call, nested_fit_child, nested_over_child, signature_of_arity, site, spent,
+    Toy,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -203,13 +204,13 @@ impl Body for TestBody {
     }
 }
 
-fn host_factory(
-    action: HostAction,
-) -> (
+type HostFixture = (
     TestBodyFactory,
     Arc<Mutex<Vec<ContextRead>>>,
     Arc<Mutex<Vec<&'static str>>>,
-) {
+);
+
+fn host_factory(action: HostAction) -> HostFixture {
     let reads = Arc::new(Mutex::new(Vec::new()));
     let resumes = Arc::new(Mutex::new(Vec::new()));
     (

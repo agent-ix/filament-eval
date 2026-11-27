@@ -1,14 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! FR-400 canonical operation projection tests.
 
+#[cfg(feature = "construct")]
+use filament_checked::construct;
 use filament_checked::node::{CaseArm, CheckedLiteral, RecordSlot};
-use filament_checked::{construct, NodeKind, NodeRead};
-use filament_exact::{EffectiveId, OriginalDeclarationKey, Value, ValueType};
+use filament_checked::{NodeKind, NodeRead};
+#[cfg(feature = "construct")]
+use filament_exact::{EffectiveId, OriginalDeclarationKey};
+use filament_exact::{Value, ValueType};
 use filament_semantic_value::location::{ExpressionLocation, ExpressionOwner};
+#[cfg(feature = "construct")]
 use ix_trace_rs::trace;
 
 /// Provenance: QSL-2395
 /// Trace: FR-400-AC-11
+#[cfg(feature = "construct")]
 #[trace("FR-400-AC-11")]
 #[test]
 fn pending_reference_literal_constructs_and_survives_reader_projection() {
@@ -46,6 +52,7 @@ fn pending_reference_literal_constructs_and_survives_reader_projection() {
 }
 
 /// Provenance: QSL-2395
+#[cfg(feature = "construct")]
 #[test]
 fn pending_reference_literal_refuses_empty_identity() {
     let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));
@@ -56,6 +63,7 @@ fn pending_reference_literal_refuses_empty_identity() {
 }
 
 /// Provenance: QSL-2395
+#[cfg(feature = "construct")]
 #[test]
 fn pending_reference_literal_refuses_non_utf8_identity() {
     let object_type = EffectiveId::new(None, OriginalDeclarationKey::new("fixture", "counter"));

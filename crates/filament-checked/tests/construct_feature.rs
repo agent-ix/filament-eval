@@ -9,6 +9,10 @@ use ix_trace_rs::trace;
 
 #[test]
 #[trace("FR-400-AC-4")]
+#[allow(
+    clippy::assertions_on_constants,
+    reason = "assert the selected feature configuration"
+)]
 fn default_features_leave_checked_constructors_disabled() {
     assert!(
         !cfg!(feature = "construct"),

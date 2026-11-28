@@ -69,7 +69,7 @@ name = "filament-checked"
 version = "0.1.6"
 dependencies = [
  "filament-exact",
- "filament-semantic-value",
+ "filament-semantic-value 0.1.5 (git+https://github.com/agent-ix/filament-semantic-value?rev=bb9e9053a6b60d5695d0585add616beaee859543)",
  "ix-trace-rs",
  "quire-canonical 0.3.3",
  "serde",
@@ -81,7 +81,7 @@ name = "filament-eval"
 version = "0.1.6"
 dependencies = [
  "filament-exact",
- "filament-semantic-value",
+ "filament-semantic-value 0.1.5 (git+https://github.com/agent-ix/filament-semantic-value?rev=95a9034d5ac8abe856f1d67428dd60c9bbc85fc5)",
  "ix-trace-rs",
  "thiserror",
 ]
@@ -110,6 +110,16 @@ source = "git+https://github.com/agent-ix/filament-semantic-value?rev=95a9034d5a
 dependencies = [
  "filament-exact",
  "quire-canonical 0.3.2",
+ "thiserror",
+]
+
+[[package]]
+name = "filament-semantic-value"
+version = "0.1.5"
+source = "git+https://github.com/agent-ix/filament-semantic-value?rev=bb9e9053a6b60d5695d0585add616beaee859543#bb9e9053a6b60d5695d0585add616beaee859543"
+dependencies = [
+ "filament-exact",
+ "quire-canonical 0.3.3",
  "thiserror",
 ]
 

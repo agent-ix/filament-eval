@@ -14,7 +14,7 @@ name = "filament_eval"
 path = "src/lib.rs"
 
 [dependencies]
-filament-semantic-value = { git = "https://github.com/agent-ix/filament-semantic-value", rev = "95a9034d5ac8abe856f1d67428dd60c9bbc85fc5", default-features = false }
+filament-semantic-value = { git = "https://github.com/agent-ix/filament-semantic-value", rev = "bb9e9053a6b60d5695d0585add616beaee859543", default-features = false }
 filament-exact = { git = "https://github.com/agent-ix/filament-exact", rev = "743c42e4e458782bf7a8befc3b76cc8a190ed727", default-features = false }
 thiserror = { version = "2.0.20", default-features = false }
 
